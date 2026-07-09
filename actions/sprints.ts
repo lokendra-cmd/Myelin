@@ -232,6 +232,22 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
   await connectDB();
   const data = taskUpdateSchema.parse(input);
   const { highlight, ...updates } = data;
+
+  if (updates.completed === true) {
+    const current = await Task.findOne({ _id: taskId, sprintId }).lean();
+    if (current) {
+      if (!current.completedAt) {
+        (updates as any).completedAt = new Date();
+      }
+      if (!current.startedAt) {
+        (updates as any).startedAt = new Date();
+      }
+    }
+  } else if (updates.completed === false) {
+    (updates as any).completedAt = null;
+    (updates as any).startedAt = null;
+  }
+
   await Task.findOneAndUpdate({ _id: taskId, sprintId }, updates);
   if (highlight !== undefined) {
     const sprint = await Sprint.findById(sprintId).lean<{ highlightTaskIds?: unknown; highlightTaskId?: unknown }>();

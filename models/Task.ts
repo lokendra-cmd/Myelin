@@ -8,6 +8,8 @@ const TaskSchema = new Schema(
     completed: { type: Boolean, default: false },
     isRecurring: { type: Boolean, default: false },
     deadlineAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
     order: { type: Number, default: 0 },
   },
   { timestamps: true },

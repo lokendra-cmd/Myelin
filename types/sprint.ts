@@ -18,6 +18,8 @@ export type TaskDTO = {
   completed: boolean;
   isRecurring: boolean;
   deadlineAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   order: number;
   createdAt: string;
   updatedAt: string;

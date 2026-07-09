@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } f
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { ArrowDownToLine, CalendarClock, Check, FileDown, FolderPlus, GripVertical, Pencil, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
+import { Activity, ArrowDownToLine, Calendar, CalendarClock, CalendarDays, Check, Clock, FileDown, FileText, FolderPlus, GripVertical, Pencil, Play, Plus, ShieldCheck, Star, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -342,7 +342,7 @@ export function SprintWorkspace({
             </Button>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="space-y-6">
             {visibleCategories.map((category, index) => (
               <TaskSection
                 key={category.key}
@@ -473,50 +473,170 @@ function TaskSection(props: {
           </button>
         </div>
       </div>
-      <div className="space-y-2">
-        {props.tasks.map((task) => (
-          <motion.div
-            key={task._id}
-            layout
-            draggable
-            onDragStart={() => props.onDrag(task._id)}
-            onDragEnd={() => props.onDrag(null)}
-            onDrop={(event) => {
-              event.stopPropagation();
-              props.onDrop(props.category.key, task._id);
-            }}
-            className={cn("group rounded-md border border-transparent bg-zinc-50 p-3 dark:bg-zinc-900", props.dragging === task._id && "opacity-40")}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <GripVertical className="size-4 shrink-0 text-zinc-300" />
-              <button
-                onClick={() => props.onUpdate(task._id, { completed: !task.completed })}
-                className={cn("grid size-5 shrink-0 place-items-center rounded border transition", task.completed ? "border-zinc-950 bg-zinc-950 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-950" : "border-zinc-300 dark:border-zinc-700")}
+      <div className="space-y-2.5">
+        {props.tasks.map((task) => {
+          const isCompleted = task.completed;
+          const isInProgress = !task.completed && !!task.startedAt;
+          const isBeforeStarting = !task.completed && !task.startedAt;
+
+          let statusIcon;
+          if (isCompleted) {
+            statusIcon = (
+              <div className="size-10 rounded-full flex items-center justify-center bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950/20 shrink-0">
+                <Check className="size-5" />
+              </div>
+            );
+          } else if (isInProgress) {
+            statusIcon = (
+              <div className="size-10 rounded-full flex items-center justify-center bg-emerald-50/70 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950/20 shrink-0">
+                <Activity className="size-5 animate-pulse" />
+              </div>
+            );
+          } else {
+            statusIcon = (
+              <div className="size-10 rounded-full flex items-center justify-center bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 shrink-0">
+                <FileText className="size-5" />
+              </div>
+            );
+          }
+
+          let actionButton;
+          if (isCompleted) {
+            actionButton = (
+              <div className="bg-emerald-50/50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-950/30 px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold select-none">
+                <Check className="size-3.5" /> Completed
+              </div>
+            );
+          } else if (isInProgress) {
+            actionButton = (
+              <Button
+                variant="subtle"
+                size="sm"
+                onClick={() => props.onUpdate(task._id, { completed: true })}
+                className="border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-800 font-semibold px-3 py-1.5 h-auto text-xs shrink-0 dark:bg-zinc-950 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
               >
-                {task.completed && <Check className="size-3" />}
-              </button>
-              <input
-                defaultValue={task.title}
-                onChange={(event) => props.debouncedTaskTitle(task._id, event.target.value)}
-                className={cn("min-w-0 flex-1 bg-transparent text-sm outline-none", task.completed && "text-zinc-400 line-through")}
-              />
-              <button title="Recurring" onClick={() => props.onUpdate(task._id, { isRecurring: !task.isRecurring })} className={cn("text-xs text-zinc-400", task.isRecurring && "text-zinc-950 dark:text-zinc-50")}>↻</button>
-              <button
-                title="Highlight"
-                onClick={() => props.onUpdate(task._id, { highlight: !props.highlightTaskIds.includes(task._id) })}
-                className={cn("text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50", props.highlightTaskIds.includes(task._id) && "text-amber-500")}
+                <Check className="size-3.5" /> Mark Completed
+              </Button>
+            );
+          } else {
+            actionButton = (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => props.onUpdate(task._id, { startedAt: new Date().toISOString() })}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-3 py-1.5 h-auto text-xs shrink-0 flex items-center gap-1.5"
               >
-                <Star className="size-4" />
-              </button>
-              <button title="Delete" onClick={() => props.onDelete(task._id)} className="text-zinc-300 hover:text-red-500">
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-            <div className="mt-3">
-              <TaskDeadlineControls task={task} onUpdate={props.onUpdate} />
-            </div>
-          </motion.div>
-        ))}
+                <Play className="size-3 fill-current" /> Start Task
+              </Button>
+            );
+          }
+
+          return (
+            <motion.div
+              key={task._id}
+              layout
+              draggable
+              onDragStart={() => props.onDrag(task._id)}
+              onDragEnd={() => props.onDrag(null)}
+              onDrop={(event) => {
+                event.stopPropagation();
+                props.onDrop(props.category.key, task._id);
+              }}
+              className={cn(
+                "group relative bg-white/80 dark:bg-zinc-950/70 border border-zinc-200/80 dark:border-zinc-800 p-4 rounded-xl shadow-sm transition hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4",
+                props.dragging === task._id && "opacity-40"
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="cursor-grab text-zinc-300 hover:text-zinc-500 dark:text-zinc-700 dark:hover:text-zinc-500 shrink-0">
+                  <GripVertical className="size-4" />
+                </div>
+                {statusIcon}
+                <div className="min-w-0 flex-1">
+                  <input
+                    defaultValue={task.title}
+                    onChange={(event) => props.debouncedTaskTitle(task._id, event.target.value)}
+                    className={cn(
+                      "w-full bg-transparent text-sm font-semibold outline-none text-zinc-800 dark:text-zinc-100",
+                      isCompleted && "text-zinc-400 line-through dark:text-zinc-600"
+                    )}
+                  />
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                    {isCompleted ? (
+                      <span className="flex items-center gap-1">
+                        <Check className="size-3 text-emerald-600" />
+                        Completed on {formatFullDateTime(task.completedAt || task.updatedAt)}
+                      </span>
+                    ) : task.deadlineAt ? (
+                      <span className="flex items-center gap-1.5">
+                        <CalendarClock className="size-3.5" />
+                        Deadline: {formatFullDateTime(task.deadlineAt)}
+                      </span>
+                    ) : (
+                      <button
+                        title="Add deadline"
+                        onClick={() => props.onUpdate(task._id, { deadlineAt: deadlineDraftToIso({ ...defaultDeadlineDraft(props.category.key), enabled: true }) })}
+                        className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 border border-dashed border-zinc-200 dark:border-zinc-800 rounded px-2 py-0.5"
+                      >
+                        <CalendarClock className="size-3" />
+                        Add deadline
+                      </button>
+                    )}
+                  </div>
+                  {isInProgress && (
+                    <div className="flex items-center gap-1 mt-1.5 bg-emerald-50/50 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/30">
+                      <span className="size-1 rounded-full bg-emerald-600 dark:bg-emerald-400 animate-pulse" />
+                      In Progress
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-zinc-100 dark:border-zinc-900">
+                {task.deadlineAt && !isCompleted && (
+                  <TaskCountdown deadlineAt={task.deadlineAt} />
+                )}
+
+                <div className="flex items-center gap-2">
+                  {actionButton}
+                  
+                  <div className="flex items-center gap-0.5 text-zinc-400 dark:text-zinc-600">
+                    {task.deadlineAt && !isCompleted && (
+                      <button
+                        title="Clear deadline"
+                        onClick={() => props.onUpdate(task._id, { deadlineAt: null })}
+                        className="p-1 hover:text-red-500 transition"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                    <button
+                      title="Recurring"
+                      onClick={() => props.onUpdate(task._id, { isRecurring: !task.isRecurring })}
+                      className={cn("p-1 hover:text-zinc-950 dark:hover:text-zinc-50 transition", task.isRecurring && "text-zinc-950 dark:text-zinc-50")}
+                    >
+                      ↻
+                    </button>
+                    <button
+                      title="Highlight"
+                      onClick={() => props.onUpdate(task._id, { highlight: !props.highlightTaskIds.includes(task._id) })}
+                      className={cn("p-1 hover:text-zinc-950 dark:hover:text-zinc-50 transition", props.highlightTaskIds.includes(task._id) && "text-amber-500")}
+                    >
+                      <Star className="size-3.5" />
+                    </button>
+                    <button
+                      title="Delete"
+                      onClick={() => props.onDelete(task._id)}
+                      className="p-1 hover:text-red-500 transition"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
       <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex items-center gap-2">
@@ -826,3 +946,69 @@ function todayInputValue() {
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
+
+function formatFullDateTime(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  const day = date.getDate();
+  const month = new Intl.DateTimeFormat("en", { month: "long" }).format(date);
+  const year = date.getFullYear();
+  const time = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: true }).format(date);
+  return `${day} ${month} ${year}, ${time}`;
+}
+
+function TaskCountdown({ deadlineAt }: { deadlineAt: string }) {
+  const [timeLeft, setTimeLeft] = useState<{ hrs: string; mins: string; secs: string } | null>(null);
+
+  useEffect(() => {
+    function updateTimer() {
+      const target = new Date(deadlineAt).getTime();
+      const now = Date.now();
+      const diff = target - now;
+      if (diff <= 0) {
+        setTimeLeft({ hrs: "00", mins: "00", secs: "00" });
+        return;
+      }
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+
+      setTimeLeft({
+        hrs: String(hrs).padStart(2, "0"),
+        mins: String(mins).padStart(2, "0"),
+        secs: String(secs).padStart(2, "0"),
+      });
+    }
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [deadlineAt]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-center border-l border-zinc-200/80 px-6 dark:border-zinc-800">
+      <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+        Time Remaining
+      </div>
+      <div className="mt-1.5 flex items-center font-mono text-xl font-bold tracking-tight text-zinc-700 dark:text-zinc-300">
+        <div className="flex flex-col items-center">
+          <span>{timeLeft.hrs}</span>
+          <span className="text-[8px] font-sans font-medium tracking-normal text-zinc-400 dark:text-zinc-500 mt-0.5">HRS</span>
+        </div>
+        <span className="text-zinc-400 px-2 pb-4">:</span>
+        <div className="flex flex-col items-center">
+          <span>{timeLeft.mins}</span>
+          <span className="text-[8px] font-sans font-medium tracking-normal text-zinc-400 dark:text-zinc-500 mt-0.5">MINS</span>
+        </div>
+        <span className="text-zinc-400 px-2 pb-4">:</span>
+        <div className="flex flex-col items-center">
+          <span>{timeLeft.secs}</span>
+          <span className="text-[8px] font-sans font-medium tracking-normal text-zinc-400 dark:text-zinc-500 mt-0.5">SECS</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+

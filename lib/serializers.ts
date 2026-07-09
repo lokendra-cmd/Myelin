@@ -13,6 +13,8 @@ export function serializeTask(task: LeanTask): TaskDTO {
     completed: Boolean(task.completed),
     isRecurring: Boolean(task.isRecurring),
     deadlineAt: task.deadlineAt ? new Date(task.deadlineAt as string | Date).toISOString() : null,
+    startedAt: task.startedAt ? new Date(task.startedAt as string | Date).toISOString() : null,
+    completedAt: task.completedAt ? new Date(task.completedAt as string | Date).toISOString() : null,
     order: Number(task.order ?? 0),
     createdAt: new Date(task.createdAt as string | Date).toISOString(),
     updatedAt: new Date(task.updatedAt as string | Date).toISOString(),
