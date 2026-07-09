@@ -12,5 +12,8 @@ const CategorySchema = new Schema(
 
 export type CategoryDocument = InferSchemaType<typeof CategorySchema>;
 
-export const Category: Model<CategoryDocument> =
-  mongoose.models.Category || mongoose.model("Category", CategorySchema);
+if (mongoose.models.Category) {
+  delete (mongoose.models as any).Category;
+}
+
+export const Category: Model<CategoryDocument> = mongoose.model("Category", CategorySchema);
