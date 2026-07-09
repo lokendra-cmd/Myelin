@@ -160,9 +160,6 @@ export function SprintWorkspace({
   }
 
   function deleteCategory(key: string, label: string) {
-    const confirmed = window.confirm(`Delete ${label}? This will also delete every task in this category.`);
-    if (!confirmed) return;
-
     startTransition(() => {
       void fetch(`/api/categories/${encodeURIComponent(key)}`, {
         method: "DELETE",
@@ -448,6 +445,7 @@ function TaskItem({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [confirmMode, setConfirmMode] = useState<"none" | "start-again" | "delete">("none");
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -455,6 +453,7 @@ function TaskItem({
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
+        setConfirmMode("none");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -507,20 +506,16 @@ function TaskItem({
     );
   }
 
-  function handleStartAgain() {
+  function handleStartAgainConfirmed() {
     setMenuOpen(false);
-    const confirmed = window.confirm("Are you sure you want to start this task again? This will clear the current active session but preserve all history.");
-    if (confirmed) {
-      onUpdate(task._id, { completed: false, startedAt: null, completedAt: null });
-    }
+    setConfirmMode("none");
+    onUpdate(task._id, { completed: false, startedAt: null, completedAt: null });
   }
 
-  function handleDelete() {
+  function handleDeleteConfirmed() {
     setMenuOpen(false);
-    const confirmed = window.confirm("Are you sure you want to permanently delete this task?");
-    if (confirmed) {
-      onDelete(task._id);
-    }
+    setConfirmMode("none");
+    onDelete(task._id);
   }
 
   return (
@@ -640,7 +635,7 @@ function TaskItem({
                   </button>
                   <button
                     title="Delete"
-                    onClick={handleDelete}
+                    onClick={() => onDelete(task._id)}
                     className="p-1 hover:text-red-500 transition"
                   >
                     <Trash2 className="size-3.5" />
@@ -657,33 +652,76 @@ function TaskItem({
                   </button>
                   
                   {menuOpen && (
-                    <div className="absolute right-0 mt-1.5 w-36 rounded-md border border-zinc-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 z-20 overflow-hidden">
-                      <div className="py-0.5">
-                        <button
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setHistoryOpen(true);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                        >
-                          <History className="size-3.5" />
-                          View History
-                        </button>
-                        <button
-                          onClick={handleStartAgain}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                        >
-                          <RotateCcw className="size-3.5" />
-                          Start Again
-                        </button>
-                        <button
-                          onClick={handleDelete}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
-                        >
-                          <Trash2 className="size-3.5" />
-                          Delete Task
-                        </button>
-                      </div>
+                    <div className="absolute right-0 mt-1.5 w-56 rounded-xl border border-zinc-200 bg-white shadow-xl ring-1 ring-black/5 focus:outline-none dark:border-zinc-800 dark:bg-zinc-950 z-20 overflow-hidden transition-all duration-200">
+                      {confirmMode === "none" && (
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setHistoryOpen(true);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900 transition"
+                          >
+                            <History className="size-3.5" />
+                            View History
+                          </button>
+                          <button
+                            onClick={() => setConfirmMode("start-again")}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900 transition"
+                          >
+                            <RotateCcw className="size-3.5" />
+                            Start Again
+                          </button>
+                          <button
+                            onClick={() => setConfirmMode("delete")}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20 transition"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete Task
+                          </button>
+                        </div>
+                      )}
+
+                      {confirmMode === "start-again" && (
+                        <div className="p-3 text-left animate-fade-in">
+                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Start a new session?</p>
+                          <div className="mt-3 flex justify-end gap-2">
+                            <button
+                              onClick={() => setConfirmMode("none")}
+                              className="px-2.5 py-1.5 rounded-md text-[11px] font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleStartAgainConfirmed}
+                              className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-sm"
+                            >
+                              Start Again
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {confirmMode === "delete" && (
+                        <div className="p-3 text-left animate-fade-in">
+                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Delete this task?</p>
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">This action cannot be undone.</p>
+                          <div className="mt-4 flex justify-end gap-2">
+                            <button
+                              onClick={() => setConfirmMode("none")}
+                              className="px-2.5 py-1.5 rounded-md text-[11px] font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleDeleteConfirmed}
+                              className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white transition shadow-sm"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -775,39 +813,63 @@ function TaskSection(props: {
 }) {
   const style = categoryStyle(props.category);
   const [editingName, setEditingName] = useState(false);
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(false);
   const categoryIcon = props.category.emoji === "•" ? "" : props.category.emoji;
 
   return (
     <Card className={cn("p-4 ring-1", style.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          {categoryIcon && <span className="shrink-0">{categoryIcon}</span>}
-          {editingName ? (
-            <input
-              autoFocus
-              value={props.category.label}
-              onBlur={() => setEditingName(false)}
-              onChange={(event) => props.onRename(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") setEditingName(false);
+      {confirmDeleteCategory ? (
+        <div className="mb-3 flex items-center justify-between bg-red-50/50 dark:bg-red-950/10 border border-red-100/30 dark:border-red-950/20 px-3 py-2 rounded-lg text-xs animate-fade-in">
+          <span className="font-semibold text-red-800 dark:text-red-400">Delete category and tasks?</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setConfirmDeleteCategory(false)}
+              className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 font-medium transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setConfirmDeleteCategory(false);
+                props.onDeleteCategory();
               }}
-              className={cn("min-w-0 bg-transparent text-sm font-semibold outline-none", style.tone)}
-              aria-label="Category name"
-            />
-          ) : (
-            <h2 className={cn("truncate text-sm font-semibold", style.tone)}>{props.category.label}</h2>
-          )}
-          <button title="Edit category name" onClick={() => setEditingName(true)} className="text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50">
-            <Pencil className="size-3.5" />
-          </button>
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold px-2.5 py-1 rounded-md shadow-sm transition"
+            >
+              Delete
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400">{props.tasks.length}</span>
-          <button title="Delete category" onClick={props.onDeleteCategory} className="text-zinc-300 hover:text-red-500">
-            <Trash2 className="size-4" />
-          </button>
+      ) : (
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            {categoryIcon && <span className="shrink-0">{categoryIcon}</span>}
+            {editingName ? (
+              <input
+                autoFocus
+                value={props.category.label}
+                onBlur={() => setEditingName(false)}
+                onChange={(event) => props.onRename(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") setEditingName(false);
+                }}
+                className={cn("min-w-0 bg-transparent text-sm font-semibold outline-none", style.tone)}
+                aria-label="Category name"
+              />
+            ) : (
+              <h2 className={cn("truncate text-sm font-semibold", style.tone)}>{props.category.label}</h2>
+            )}
+            <button title="Edit category name" onClick={() => setEditingName(true)} className="text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50">
+              <Pencil className="size-3.5" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400">{props.tasks.length}</span>
+            <button title="Delete category" onClick={() => setConfirmDeleteCategory(true)} className="text-zinc-300 hover:text-red-500 transition">
+              <Trash2 className="size-4" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       <div className="space-y-2.5">
         {props.tasks.map((task) => (
           <TaskItem
