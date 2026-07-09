@@ -324,6 +324,24 @@ export function SprintWorkspace({
             </div>
           </Card>
 
+          {/* Add Category — full-width bar above the task grid */}
+          <div className="flex items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950">
+            <FolderPlus className="size-4 shrink-0 text-zinc-400" />
+            <Input
+              value={categoryDraft}
+              placeholder="New category name…"
+              onChange={(event) => setCategoryDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") addCategory();
+              }}
+              className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus:border-0 focus:ring-0"
+            />
+            <Button variant="subtle" size="sm" onClick={addCategory} className="shrink-0">
+              <Plus className="size-4" />
+              Add
+            </Button>
+          </div>
+
           <div className="grid gap-4 xl:grid-cols-2">
             {visibleCategories.map((category, index) => (
               <TaskSection
@@ -348,30 +366,9 @@ export function SprintWorkspace({
                 debouncedTaskTitle={debouncedTaskTitle}
               />
             ))}
-            <Card className="flex min-h-44 flex-col justify-between border-dashed p-4">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-500">
-                  <FolderPlus className="size-4" />
-                  Add Category
-                </div>
-                <p className="mt-2 text-sm leading-6 text-zinc-500">Create another lane for the way you actually work.</p>
-              </div>
-              <div className="mt-5 flex items-center gap-2">
-                <Input
-                  value={categoryDraft}
-                  placeholder="Category name"
-                  onChange={(event) => setCategoryDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") addCategory();
-                  }}
-                />
-                <Button variant="subtle" size="icon" onClick={addCategory}>
-                  <Plus className="size-4" />
-                </Button>
-              </div>
-            </Card>
           </div>
         </section>
+
 
         <aside className="space-y-6">
           <Card className="p-6">
