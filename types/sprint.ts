@@ -20,6 +20,10 @@ export type TaskDTO = {
   deadlineAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
+  history?: Array<{
+    startedAt: string;
+    completedAt: string;
+  }> | null;
   order: number;
   createdAt: string;
   updatedAt: string;

@@ -8,6 +8,14 @@ export const taskInputSchema = z.object({
   deadlineAt: z.string().datetime().nullable().optional(),
   startedAt: z.string().datetime().nullable().optional(),
   completedAt: z.string().datetime().nullable().optional(),
+  history: z
+    .array(
+      z.object({
+        startedAt: z.string().datetime(),
+        completedAt: z.string().datetime(),
+      })
+    )
+    .optional(),
   order: z.number().optional(),
 });
 

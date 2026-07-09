@@ -235,15 +235,19 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
 
   if (updates.completed === true) {
     const current = await Task.findOne({ _id: taskId, sprintId }).lean();
-    if (current) {
-      if (!current.completedAt) {
-        (updates as any).completedAt = new Date();
-      }
-      if (!current.startedAt) {
-        (updates as any).startedAt = new Date();
-      }
+    if (current && !current.completed) {
+      const completedAtDate = new Date();
+      const startedAtDate = current.startedAt || new Date();
+      
+      (updates as any).completedAt = completedAtDate;
+      (updates as any).startedAt = startedAtDate;
+
+      const newSession = { startedAt: startedAtDate, completedAt: completedAtDate };
+      const currentHistory = (current as any).history || [];
+      (updates as any).history = [...currentHistory, newSession];
     }
-  } else if (updates.completed === false) {
+  } else if (updates.completed === false || updates.startedAt === null) {
+    (updates as any).completed = false;
     (updates as any).completedAt = null;
     (updates as any).startedAt = null;
   }

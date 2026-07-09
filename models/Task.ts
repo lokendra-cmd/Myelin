@@ -10,6 +10,15 @@ const TaskSchema = new Schema(
     deadlineAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
+    history: {
+      type: [
+        {
+          startedAt: { type: Date, required: true },
+          completedAt: { type: Date, required: true },
+        },
+      ],
+      default: [],
+    },
     order: { type: Number, default: 0 },
   },
   { timestamps: true },
