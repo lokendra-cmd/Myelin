@@ -41,7 +41,7 @@ export function CommandPalette() {
   const actions = useMemo(
     () => [
       {
-        label: "Open Today's Myelin",
+        label: "Open Myelination",
         icon: Sparkles,
         run: async () => {
           const res = await fetch("/api/sprints", { method: "POST", body: JSON.stringify({}) });

@@ -12,6 +12,10 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const today = data.today;
   const highlightTasks = today?.tasks.filter((task) => today.highlightTaskIds.includes(task._id)) ?? [];
 
+  const todayTitle = today?.title.startsWith("Sprint ")
+    ? `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${today.date}T00:00:00`))}`
+    : today?.title;
+
   return (
     <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px]">
       <section className="space-y-6">
@@ -29,10 +33,10 @@ export function Dashboard({ data }: { data: DashboardData }) {
               <div>
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
                   <Sparkles className="size-4" />
-                  Current Myelin
+                  Current Myelination
                 </div>
                 <Link href={`/sprints/${today._id}`} className="mt-3 inline-flex items-center gap-2 text-2xl font-semibold hover:underline">
-                  {today.title}
+                  {todayTitle}
                   <ArrowRight className="size-5" />
                 </Link>
                 <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -49,7 +53,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
             <div className="flex min-h-64 flex-col items-center justify-center text-center">
               <h2 className="text-2xl font-semibold">No sprint for today</h2>
               <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">Start clean. Recurring tasks will come along automatically.</p>
-              <div className="mt-6"><NewSprintButton label="Create Today's Myelin" /></div>
+              <div className="mt-6"><NewSprintButton label="Create Myelination" /></div>
             </div>
           )}
         </Card>

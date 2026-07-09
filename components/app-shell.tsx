@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, Command, Home, Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import { BarChart3, CalendarDays, Command, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/command-palette";
 import { NewSprintButton } from "@/components/new-sprint-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/store";
 
@@ -19,21 +18,10 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const setCommandOpen = useUIStore((state) => state.setCommandOpen);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const dark = mounted && theme === "dark";
-
   return (
-    <div
-      className="min-h-screen bg-[#f7f7f5] text-zinc-950 dark:bg-[#090909] dark:text-zinc-50"
-      style={{ colorScheme: dark ? "dark" : "light" }}
-    >
+    <div className="min-h-screen bg-[#f7f7f5] text-zinc-950 dark:bg-[#090909] dark:text-zinc-50">
       <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-[#f7f7f5]/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-[#090909]/80">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 text-sm font-semibold">
@@ -59,9 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Button variant="ghost" size="icon" title="Command palette" onClick={() => setCommandOpen(true)}>
               <Command className="size-4" />
             </Button>
-            <Button variant="ghost" size="icon" title="Theme" onClick={() => setTheme(dark ? "light" : "dark")}>
-              {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            </Button>
+            <ThemeToggle />
             <NewSprintButton size="sm" />
           </div>
         </div>

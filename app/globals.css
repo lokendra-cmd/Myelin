@@ -1,24 +1,35 @@
 @import "tailwindcss";
 
+/*
+ * Tailwind v4 dark mode — class strategy.
+ *
+ * By default, Tailwind v4 compiles `dark:` utilities using
+ * `@media (prefers-color-scheme: dark)`. This overrides that behaviour
+ * so `dark:` activates when a `.dark` class is present on any ancestor,
+ * which is exactly what `next-themes` (attribute="class") sets on <html>.
+ */
+@variant dark (&:where(.dark, .dark *));
+
+/* ─── CSS custom properties ──────────────────────────────────────── */
+/*
+ * These variables back the `body` background/color declarations below.
+ * All component-level theming is done via Tailwind `dark:` utilities,
+ * which activate when <html class="dark"> is present (set by next-themes).
+ */
+
 :root {
+  color-scheme: light;
   --background: #f7f7f5;
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  --font-mono: "SF Mono", "Roboto Mono", ui-monospace, monospace;
+.dark {
+  color-scheme: dark;
+  --background: #090909;
+  --foreground: #ededed;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ─── Base ───────────────────────────────────────────────────────── */
 body {
   background: var(--background);
   color: var(--foreground);
@@ -27,10 +38,19 @@ body {
 
 ::selection {
   background: #18181b;
-  color: white;
+  color: #ffffff;
+}
+
+.dark ::selection {
+  background: #e4e4e7;
+  color: #09090b;
 }
 
 * {
   scrollbar-width: thin;
   scrollbar-color: #d4d4d8 transparent;
+}
+
+.dark * {
+  scrollbar-color: #3f3f46 transparent;
 }

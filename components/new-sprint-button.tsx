@@ -12,7 +12,7 @@ type NewSprintButtonProps = {
   size?: "sm" | "md";
 };
 
-export function NewSprintButton({ label = "New Myelin", size = "md" }: NewSprintButtonProps) {
+export function NewSprintButton({ label = "New Myelination", size = "md" }: NewSprintButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(todayInputValue());
@@ -58,16 +58,16 @@ export function NewSprintButton({ label = "New Myelin", size = "md" }: NewSprint
               <CalendarDays className="size-5 text-zinc-500" />
             </div>
             <div>
-              <Dialog.Title className="text-lg font-semibold">New Myelin</Dialog.Title>
+              <Dialog.Title className="text-lg font-semibold">New Myelination</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm leading-6 text-zinc-500">
-                Pick a date. If a sprint already exists for that day, Myelin will open it.
+                Pick a date. If a sprint already exists for that day, Myelination will open it.
               </Dialog.Description>
             </div>
           </div>
 
           <form onSubmit={createOrOpenSprint} className="mt-5 space-y-4">
             <label className="block space-y-2">
-              <span className="text-xs font-medium text-zinc-500">Myelin date</span>
+              <span className="text-xs font-medium text-zinc-500">Myelination date</span>
               <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
             </label>
             {error && <p className="text-sm text-red-500">{error}</p>}

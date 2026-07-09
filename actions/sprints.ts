@@ -118,7 +118,7 @@ export async function createSprint(date = isoDate()) {
   const existing = await Sprint.findOne({ date }).lean();
   if (existing) return serializeSprint(existing, await Task.find({ sprintId: existing._id }).lean());
 
-  const title = `Sprint ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(`${date}T00:00:00`))}`;
+  const title = `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${date}T00:00:00`))}`;
   const sprint = await Sprint.create({ date, title, highlightTaskIds: [] });
   const recurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
 

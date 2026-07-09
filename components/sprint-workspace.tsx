@@ -259,6 +259,10 @@ export function SprintWorkspace({
     });
   }
 
+  const displayTitle = sprint.title.startsWith("Sprint ")
+    ? `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${sprint.date}T00:00:00`))}`
+    : sprint.title;
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <Confetti active={sprint.productivity === 100 && sprint.totalTasks > 0} />
@@ -266,7 +270,7 @@ export function SprintWorkspace({
         <div>
           <p className="text-sm text-zinc-500">{prettyDate(sprint.date)}</p>
           <input
-            value={sprint.title}
+            value={displayTitle}
             onChange={(event) => {
               setSprint({ ...sprint, title: event.target.value });
               saveTitle(event.target.value);

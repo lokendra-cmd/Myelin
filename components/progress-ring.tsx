@@ -1,12 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { productivityMood } from "@/utils/productivity";
 
 export function ProgressRing({ value, size = 168 }: { value: number; size?: number }) {
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
-  const mood = productivityMood(value);
 
   return (
     <div className="relative grid place-items-center" style={{ width: size, height: size }}>
@@ -25,10 +23,7 @@ export function ProgressRing({ value, size = 168 }: { value: number; size?: numb
           strokeDasharray={circumference}
         />
       </svg>
-      <div className="absolute text-center">
-        <div className="text-4xl font-semibold tracking-normal">{value}%</div>
-        <div className="mt-1 text-xs text-zinc-500">{mood.emoji} {mood.label}</div>
-      </div>
+      <div className="absolute text-4xl font-semibold tracking-normal">{value}%</div>
     </div>
   );
 }
