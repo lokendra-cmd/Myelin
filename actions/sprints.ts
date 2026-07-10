@@ -59,12 +59,15 @@ export async function getCategories(): Promise<CategoryDTO[]> {
 
 export async function createCategory(input: unknown) {
   await connectDB();
-  const { label } = categoryInputSchema.parse(input);
+  const { label, tagline, icon, themeId } = categoryInputSchema.parse(input);
   const order = await CategoryModel.countDocuments();
   const category = await CategoryModel.create({
     key: await uniqueCategoryKey(label),
     label,
     emoji: "",
+    tagline: tagline ?? "",
+    icon: icon ?? "",
+    themeId: themeId ?? "",
     order,
   });
   revalidatePath("/");
@@ -73,8 +76,12 @@ export async function createCategory(input: unknown) {
 
 export async function updateCategory(key: string, input: unknown) {
   await connectDB();
-  const { label } = categoryUpdateSchema.parse(input);
-  const category = await CategoryModel.findOneAndUpdate({ key }, { label }, { new: true }).lean();
+  const { label, tagline, icon, themeId } = categoryUpdateSchema.parse(input);
+  const category = await CategoryModel.findOneAndUpdate(
+    { key },
+    { label, tagline, icon, themeId },
+    { new: true }
+  ).lean();
   if (!category) throw new Error("Category not found");
   revalidatePath("/");
   return serializeCategory(category);
@@ -309,7 +316,7 @@ function getStreak(sprints: SprintDTO[]) {
   const productive = new Set(sprints.filter((sprint) => sprint.productivity >= 70).map((sprint) => sprint.date));
   let streak = 0;
   const cursor = new Date(`${isoDate()}T00:00:00`);
-  while (productive.has(cursor.toISOString().slice(0, 10))) {
+  while (productive.has(isoDate(cursor))) {
     streak += 1;
     cursor.setDate(cursor.getDate() - 1);
   }

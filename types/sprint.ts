@@ -5,9 +5,19 @@ export type CategoryDTO = {
   key: string;
   label: string;
   emoji: string;
+  tagline?: string;
+  themeId?: string;
+  icon?: string;
   order: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RuleDTO = {
+  id: string;
+  text: string;
+  icon?: string;
+  themeId?: string;
 };
 
 export type TaskDTO = {

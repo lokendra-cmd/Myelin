@@ -40,9 +40,15 @@ export const reorderSchema = z.object({
 });
 
 export const categoryInputSchema = z.object({
-  label: z.string().trim().min(1).max(40),
+  label: z.string().trim().min(1).max(30),
+  tagline: z.string().max(80).optional(),
+  icon: z.string().max(50).optional(),
+  themeId: z.string().max(50).optional(),
 });
 
 export const categoryUpdateSchema = z.object({
   label: z.string().trim().min(1).max(40),
+  tagline: z.string().max(80).optional(),
+  icon: z.string().max(50).optional(),
+  themeId: z.string().max(50).optional(),
 });

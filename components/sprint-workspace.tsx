@@ -4,19 +4,23 @@ import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } f
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
-import { motion } from "framer-motion";
-import { Activity, ArrowDownToLine, Calendar, CalendarClock, CalendarDays, Check, Clock, FileDown, FileText, FolderPlus, GripVertical, History, MoreVertical, Pencil, Play, Plus, RotateCcw, ShieldCheck, Star, Trash2, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Activity, ArrowDownToLine, Calendar, CalendarClock, CalendarDays, Check, ChevronDown, Clock, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, RotateCcw, ShieldCheck, Sparkles, Star, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Confetti } from "@/components/confetti";
 import { ProgressRing } from "@/components/progress-ring";
-import { categoryFallback, categoryStyle, SPRINT_RULES } from "@/lib/constants";
+import { EntityModal } from "@/components/entity/EntityModal";
+import { DynamicIcon } from "@/components/entity/ModalHeader";
+import { OverflowMenu } from "@/components/entity/OverflowMenu";
+import { hashTheme, getThemeById } from "@/lib/themeUtils";
+import { categoryFallback, SPRINT_RULES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { useShortcuts } from "@/hooks/use-shortcuts";
-import type { Category, CategoryDTO, SprintDTO, TaskDTO } from "@/types/sprint";
+import type { Category, CategoryDTO, SprintDTO, TaskDTO, RuleDTO } from "@/types/sprint";
 import { prettyDate } from "@/utils/date";
 import { productivityMood } from "@/utils/productivity";
 
@@ -55,9 +59,13 @@ export function SprintWorkspace({
   const [categories, setCategories] = useState(initialCategories);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [deadlineDraft, setDeadlineDraft] = useState<Record<string, DeadlineDraft>>({});
-  const [categoryDraft, setCategoryDraft] = useState("");
-  const [rules, setRules] = useState(SPRINT_RULES);
-  const [ruleDraft, setRuleDraft] = useState("");
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [ruleModalOpen, setRuleModalOpen] = useState(false);
+  const [rules, setRules] = useState<RuleDTO[]>([]);
+  const [rulesLoaded, setRulesLoaded] = useState(false);
+  const [editingRule, setEditingRule] = useState<RuleDTO | null>(null);
+  const [editingCategory, setEditingCategory] = useState<CategoryDTO | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const firstInput = useRef<HTMLInputElement | null>(null);
@@ -76,12 +84,54 @@ export function SprintWorkspace({
 
   useEffect(() => {
     const savedRules = localStorage.getItem("sprint:rules");
-    if (savedRules) setRules(JSON.parse(savedRules));
+    if (savedRules) {
+      try {
+        const parsed = JSON.parse(savedRules);
+        if (Array.isArray(parsed)) {
+          const migrated = parsed.map((item, index) => {
+            if (typeof item === "string") {
+              let icon = "CheckCircle";
+              if (item.includes("start")) icon = "Target";
+              else if (item.includes("9 PM")) icon = "Clock";
+              else if (item.includes("deep work")) icon = "ShieldCheck";
+              return {
+                id: `default-rule-${index}-${Date.now()}`,
+                text: item,
+                icon,
+                themeId: "",
+              };
+            }
+            return item;
+          });
+          setRules(migrated);
+          setRulesLoaded(true);
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to parse rules", err);
+      }
+    }
+    const defaultObjRules = SPRINT_RULES.map((rule, index) => {
+      let icon = "CheckCircle";
+      if (rule.includes("start")) icon = "Target";
+      else if (rule.includes("9 PM")) icon = "Clock";
+      else if (rule.includes("deep work")) icon = "ShieldCheck";
+      return {
+        id: `default-rule-${index}`,
+        text: rule,
+        icon,
+        themeId: "",
+      };
+    });
+    setRules(defaultObjRules);
+    setRulesLoaded(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("sprint:rules", JSON.stringify(rules));
-  }, [rules]);
+    if (rulesLoaded) {
+      localStorage.setItem("sprint:rules", JSON.stringify(rules));
+    }
+  }, [rules, rulesLoaded]);
 
   useShortcuts({
     n: () => firstInput.current?.focus(),
@@ -128,19 +178,8 @@ export function SprintWorkspace({
     });
   }
 
-  async function addCategory() {
-    const label = categoryDraft.trim();
-    if (!label) return;
-    setCategoryDraft("");
-    const res = await fetch("/api/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label }),
-    });
-    if (res.ok) {
-      const category = await res.json();
-      setCategories((current) => [...current, category]);
-    }
+  function handleCategoryCreated(category: CategoryDTO) {
+    setCategories((current) => [...current, category]);
   }
 
   function renameCategory(key: string, label: string) {
@@ -148,15 +187,25 @@ export function SprintWorkspace({
     saveCategoryName(key, label);
   }
 
-  function addRule() {
-    const rule = ruleDraft.trim();
-    if (!rule) return;
-    setRules((current) => [...current, rule]);
-    setRuleDraft("");
+  function handleAddRule(label: string, icon?: string) {
+    const defaultIcons = ["CheckCircle", "Target", "Sparkles"];
+    const chosenIcon = icon || defaultIcons[rules.length % defaultIcons.length];
+    const newRule: RuleDTO = {
+      id: `rule-${Date.now()}`,
+      text: label,
+      icon: chosenIcon,
+    };
+    setRules((current) => [...current, newRule]);
   }
 
-  function deleteRule(index: number) {
-    setRules((current) => current.filter((_, ruleIndex) => ruleIndex !== index));
+  function deleteRule(id: string) {
+    setRules((current) => current.filter((rule) => rule.id !== id));
+  }
+
+  function handleUpdateRule(id: string, text: string, icon?: string) {
+    setRules((current) =>
+      current.map((rule) => (rule.id === id ? { ...rule, text, icon: icon || rule.icon } : rule))
+    );
   }
 
   function deleteCategory(key: string, label: string) {
@@ -284,61 +333,226 @@ export function SprintWorkspace({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <section className="space-y-6">
-          <Card className="overflow-hidden p-0">
-            <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          {/* Daily Rules section — Matches attached design layout & aesthetics */}
+          <Card className="p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <div className="grid size-9 place-items-center rounded-md bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                <div className="grid size-10 place-items-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
                   <ShieldCheck className="size-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold">Rules</p>
-                  <p className="text-xs text-zinc-500">{rules.length} active guardrails</p>
+                  <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">Daily Rules</h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Principles that guide me every day.</p>
                 </div>
               </div>
+              <button
+                onClick={() => setRuleModalOpen(true)}
+                className="h-9 px-4 rounded-lg border border-zinc-200 hover:border-violet-300 dark:border-zinc-800 hover:bg-violet-50/50 dark:hover:bg-violet-950/20 text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 shadow-sm transition flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <Plus className="size-3.5" />
+                Add New Rule
+              </button>
             </div>
-            <div className="grid gap-3 p-5 md:grid-cols-3">
-              {rules.map((rule, index) => (
-                <div key={`${rule}-${index}`} className="group flex min-h-20 items-start justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <span className="leading-6">{rule}</span>
-                  <button title="Delete rule" onClick={() => deleteRule(index)} className="shrink-0 text-zinc-300 opacity-100 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100">
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              ))}
-              <div className="flex min-h-20 flex-col justify-between rounded-md border border-dashed border-zinc-300 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950">
-                <Input
-                  value={ruleDraft}
-                  placeholder="Add rule"
-                  onChange={(event) => setRuleDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") addRule();
-                  }}
-                />
-                <Button className="mt-3 w-full" variant="subtle" size="sm" onClick={addRule}>
-                  <Plus className="size-4" />
-                  Add Rule
-                </Button>
-              </div>
+
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 mt-5">
+              {rules.map((rule) => {
+                // Resolve deterministic theme for this rule based on its ID
+                const theme = hashTheme(rule.id);
+                // Deriving local line color matching the themes system
+                const getLineColor = (themeId: string) => {
+                  switch (themeId) {
+                    case "forest": return "bg-emerald-500";
+                    case "ocean": return "bg-blue-500";
+                    case "sky": return "bg-sky-500";
+                    case "sunset": return "bg-orange-500";
+                    case "peach": return "bg-rose-400";
+                    case "rose": return "bg-rose-500";
+                    case "lavender": return "bg-violet-500";
+                    case "indigo": return "bg-indigo-500";
+                    case "sand": return "bg-amber-500";
+                    case "mint": return "bg-teal-500";
+                    case "slate": return "bg-slate-500";
+                    case "coral": return "bg-red-500";
+                    case "stone": return "bg-stone-500";
+                    case "lemon": return "bg-lime-500";
+                    case "emerald": return "bg-emerald-500";
+                    case "teal": return "bg-teal-500";
+                    case "blue": return "bg-blue-500";
+                    case "purple": return "bg-purple-500";
+                    default: return "bg-violet-500";
+                  }
+                };
+
+                return (
+                  <div
+                    key={rule.id}
+                    className="min-h-[108px] h-full relative overflow-hidden rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 flex items-center gap-3.5 group"
+                  >
+                    {/* Squircle Icon Container */}
+                    <div className={cn("size-12 rounded-[20px] flex items-center justify-center shrink-0 border border-white/50 dark:border-zinc-800", theme.accentBg)}>
+                      <DynamicIcon name={rule.icon} className={cn("size-5", theme.accentText)} fallback={ShieldCheck} />
+                    </div>
+
+                    {/* Rule text clamped to max 3 lines */}
+                    <span className="text-[13px] font-medium leading-relaxed text-zinc-800 dark:text-zinc-200 flex-1 min-w-0 pr-4 line-clamp-3 break-words">
+                      {rule.text}
+                    </span>
+
+                    {/* Reusable Three-dot Menu */}
+                    <OverflowMenu
+                      menuOpen={activeMenuId === rule.id}
+                      onMenuOpenChange={(open) => setActiveMenuId(open ? rule.id : null)}
+                      onEdit={() => setEditingRule(rule)}
+                      onDelete={() => deleteRule(rule.id)}
+                      deleteConfirmTitle="Delete this rule?"
+                      deleteConfirmSubtext="This action cannot be undone."
+                      className="absolute top-2 right-2"
+                    />
+
+                    {/* Bottom horizontal accent line */}
+                    <div className={cn("absolute bottom-0 left-4 h-[3.5px] w-14 rounded-t-full", getLineColor(theme.id))} />
+                  </div>
+                );
+              })}
             </div>
           </Card>
 
-          {/* Add Category — full-width bar above the task grid */}
-          <div className="flex items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-950">
-            <FolderPlus className="size-4 shrink-0 text-zinc-400" />
-            <Input
-              value={categoryDraft}
-              placeholder="New category name…"
-              onChange={(event) => setCategoryDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") addCategory();
-              }}
-              className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus:border-0 focus:ring-0"
-            />
-            <Button variant="subtle" size="sm" onClick={addCategory} className="shrink-0">
-              <Plus className="size-4" />
-              Add
-            </Button>
+          {/* My Categories Header Section */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8 mt-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                My Categories
+              </h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Organize your work into focused spaces.
+              </p>
+            </div>
+            <motion.button
+              onClick={() => setCategoryModalOpen(true)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 transition-colors dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300 self-start sm:self-auto"
+              aria-label="Create new category"
+            >
+              <Sparkles className="size-3.5 text-violet-500" />
+              New Category
+            </motion.button>
           </div>
+
+          {/* Reusable Category Modal */}
+          <EntityModal
+            open={categoryModalOpen || !!editingCategory}
+            onOpenChange={(open) => {
+              if (!open) {
+                setCategoryModalOpen(false);
+                setEditingCategory(null);
+              }
+            }}
+            entityType="category"
+            title={editingCategory ? "Edit Category" : "Create New Category"}
+            submitLabel={editingCategory ? "Save Changes" : "Create Category"}
+            description={editingCategory ? "Update category information." : "Create a category to group your tasks."}
+            initialValues={
+              editingCategory
+                ? {
+                    label: editingCategory.label,
+                    tagline: editingCategory.tagline || "",
+                    icon: editingCategory.icon || "",
+                  }
+                : null
+            }
+            onSubmit={async (values) => {
+              if (editingCategory) {
+                const body = {
+                  label: values.label,
+                  tagline: values.tagline || "",
+                  icon: values.icon,
+                  themeId: editingCategory.themeId || hashTheme(values.label).id,
+                };
+                const res = await fetch(`/api/categories/${encodeURIComponent(editingCategory.key)}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error("Failed to update category");
+                const updated = await res.json();
+                
+                // Immediately update categories state
+                setCategories((current) =>
+                  current.map((cat) =>
+                    cat.key === editingCategory.key
+                      ? {
+                          ...cat,
+                          label: updated.label,
+                          tagline: updated.tagline,
+                          icon: updated.icon,
+                          themeId: updated.themeId,
+                        }
+                      : cat
+                  )
+                );
+                setEditingCategory(null);
+              } else {
+                const body = {
+                  label: values.label,
+                  tagline: values.tagline || "",
+                  icon: values.icon,
+                  themeId: hashTheme(values.label).id,
+                };
+                const res = await fetch("/api/categories", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error("Failed to create category");
+                const created = await res.json();
+                handleCategoryCreated(created);
+                setCategoryModalOpen(false);
+              }
+            }}
+          />
+
+          {/* Reusable Rule Modal */}
+          <EntityModal
+            open={ruleModalOpen}
+            onOpenChange={setRuleModalOpen}
+            entityType="rule"
+            title="New Rule"
+            description="Add a principle to guide your focus."
+            defaultIconName="CheckCircle"
+            defaultIcon={ShieldCheck}
+            onSubmit={async (values) => {
+              handleAddRule(values.label, values.icon);
+              setRuleModalOpen(false);
+            }}
+          />
+
+          {/* Edit Rule Modal */}
+          <EntityModal
+            open={!!editingRule}
+            onOpenChange={(open) => {
+              if (!open) setEditingRule(null);
+            }}
+            entityType="rule"
+            title="Edit Rule"
+            submitLabel="Save Changes"
+            description="Update this rule and icon."
+            initialValues={
+              editingRule
+                ? {
+                    label: editingRule.text,
+                    tagline: "",
+                    icon: editingRule.icon,
+                  }
+                : null
+            }
+            onSubmit={async (values) => {
+              if (editingRule) {
+                handleUpdateRule(editingRule.id, values.label, values.icon);
+                setEditingRule(null);
+              }
+            }}
+          />
 
           <div className="space-y-6">
             {visibleCategories.map((category, index) => (
@@ -354,6 +568,7 @@ export function SprintWorkspace({
                 onDeadlineDraft={(value) => setDeadlineDraft((current) => ({ ...current, [category.key]: value }))}
                 onAdd={() => add(category.key)}
                 onRename={(label) => renameCategory(category.key, label)}
+                onEditCategory={() => setEditingCategory(category)}
                 onDeleteCategory={() => deleteCategory(category.key, category.label)}
                 onUpdate={updateTask}
                 onDelete={remove}
@@ -361,6 +576,8 @@ export function SprintWorkspace({
                 onDrop={onDrop}
                 highlightTaskIds={sprint.highlightTaskIds}
                 pending={isPending}
+                activeMenuId={activeMenuId}
+                onActiveMenuIdChange={setActiveMenuId}
                 debouncedTaskTitle={debouncedTaskTitle}
               />
             ))}
@@ -800,10 +1017,13 @@ function TaskSection(props: {
   dragging: string | null;
   highlightTaskIds: string[];
   pending: boolean;
+  activeMenuId: string | null;
+  onActiveMenuIdChange: (id: string | null) => void;
   onDraft: (value: string) => void;
   onDeadlineDraft: (value: DeadlineDraft) => void;
   onAdd: () => void;
   onRename: (label: string) => void;
+  onEditCategory: () => void;
   onDeleteCategory: () => void;
   onUpdate: (taskId: string, updates: Partial<TaskDTO> & { highlight?: boolean }) => void;
   onDelete: (taskId: string) => void;
@@ -811,118 +1031,166 @@ function TaskSection(props: {
   onDrop: (category: Category, targetId?: string) => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
 }) {
-  const style = categoryStyle(props.category);
+  // Resolve theme — prefer stored themeId, fall back to deterministic hash
+  const theme = props.category.themeId
+    ? getThemeById(props.category.themeId)
+    : hashTheme(props.category._id);
+  const hasIcon = Boolean(props.category.icon);
+  const pendingCount = props.tasks.filter((t) => !t.completed).length;
+
   const [editingName, setEditingName] = useState(false);
-  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(false);
-  const categoryIcon = props.category.emoji === "•" ? "" : props.category.emoji;
+  const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <Card className={cn("p-4 ring-1", style.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
-      {confirmDeleteCategory ? (
-        <div className="mb-3 flex items-center justify-between bg-red-50/50 dark:bg-red-950/10 border border-red-100/30 dark:border-red-950/20 px-3 py-2 rounded-lg text-xs animate-fade-in">
-          <span className="font-semibold text-red-800 dark:text-red-400">Delete category and tasks?</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setConfirmDeleteCategory(false)}
-              className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 font-medium transition"
+    <Card className={cn("overflow-hidden ring-1", theme.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
+      {/* ── Themed banner header ────────────────────────────────────── */}
+      <div className={cn("bg-gradient-to-br px-4 pt-4 pb-3", theme.gradient, theme.darkGradient)}>
+        <div
+          className="flex items-start justify-between gap-3 cursor-pointer select-none"
+          onClick={(e) => {
+            // Only toggle if click is not on an action button / input
+            const target = e.target as HTMLElement;
+            if (target.closest("button") || target.closest("input")) return;
+            setCollapsed((c) => !c);
+          }}
+          role="button"
+          aria-expanded={!collapsed}
+          aria-controls={`category-body-${props.category.key}`}
+        >
+          {/* Left: icon + meta */}
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Circular icon */}
+            <div className={cn("size-11 rounded-full flex items-center justify-center shrink-0 shadow-sm border border-white/40", theme.accentBg)}>
+              {hasIcon
+                ? <DynamicIcon name={props.category.icon!} className={cn("size-5", theme.accentText)} />
+                : <span className="text-lg leading-none">{props.category.emoji === "•" ? "📁" : props.category.emoji}</span>
+              }
+            </div>
+            {/* Title + tagline */}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                {editingName ? (
+                  <input
+                    autoFocus
+                    value={props.category.label}
+                    onBlur={() => setEditingName(false)}
+                    onChange={(event) => props.onRename(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") setEditingName(false);
+                    }}
+                    className={cn("min-w-0 bg-transparent text-sm font-bold outline-none", theme.accentText)}
+                    aria-label="Category name"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <h2 className={cn("truncate text-sm font-bold", theme.accentText)}>{props.category.label}</h2>
+                )}
+                {/* Pending badge */}
+                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", theme.badge)}>
+                  {pendingCount} pending
+                </span>
+              </div>
+              {props.category.tagline && (
+                <p className={cn("mt-0.5 text-[11px] italic truncate opacity-75", theme.accentText)}>
+                  &quot;{props.category.tagline}&quot;
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Right: chevron + actions */}
+          <div className="flex items-center gap-1 shrink-0">
+            <motion.span
+              animate={{ rotate: collapsed ? -90 : 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              className="flex items-center"
+              aria-hidden
             >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                setConfirmDeleteCategory(false);
-                props.onDeleteCategory();
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold px-2.5 py-1 rounded-md shadow-sm transition"
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex min-w-0 items-center gap-2">
-            {categoryIcon && <span className="shrink-0">{categoryIcon}</span>}
-            {editingName ? (
-              <input
-                autoFocus
-                value={props.category.label}
-                onBlur={() => setEditingName(false)}
-                onChange={(event) => props.onRename(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") setEditingName(false);
-                }}
-                className={cn("min-w-0 bg-transparent text-sm font-semibold outline-none", style.tone)}
-                aria-label="Category name"
-              />
-            ) : (
-              <h2 className={cn("truncate text-sm font-semibold", style.tone)}>{props.category.label}</h2>
-            )}
-            <button title="Edit category name" onClick={() => setEditingName(true)} className="text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50">
-              <Pencil className="size-3.5" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-400">{props.tasks.length}</span>
-            <button title="Delete category" onClick={() => setConfirmDeleteCategory(true)} className="text-zinc-300 hover:text-red-500 transition">
-              <Trash2 className="size-4" />
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="space-y-2.5">
-        {props.tasks.map((task) => (
-          <TaskItem
-            key={task._id}
-            task={task}
-            category={props.category}
-            highlightTaskIds={props.highlightTaskIds}
-            pending={props.pending}
-            onUpdate={props.onUpdate}
-            onDelete={props.onDelete}
-            onDrag={props.onDrag}
-            onDrop={props.onDrop}
-            debouncedTaskTitle={props.debouncedTaskTitle}
-            dragging={props.dragging}
-          />
-        ))}
-      </div>
-      <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-center gap-2">
-          <Input
-            ref={props.firstInput}
-            value={props.draft}
-            placeholder="+ Add Task"
-            onChange={(event) => props.onDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") props.onAdd();
-            }}
-          />
-          <Button variant="subtle" size="icon" onClick={props.onAdd} disabled={props.pending}>
-            <Plus className="size-4" />
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-            <input
-              type="checkbox"
-              checked={props.deadlineDraft.enabled}
-              onChange={(event) => props.onDeadlineDraft({ ...props.deadlineDraft, enabled: event.target.checked })}
-              className="size-4 rounded border-zinc-300"
+              <ChevronDown className={cn("size-4 transition-colors", theme.accentText, "opacity-60")} />
+            </motion.span>
+            <OverflowMenu
+              menuOpen={props.activeMenuId === props.category.key}
+              onMenuOpenChange={(open) => props.onActiveMenuIdChange(open ? props.category.key : null)}
+              onEdit={props.onEditCategory}
+              onDelete={props.onDeleteCategory}
+              deleteConfirmTitle="Delete category?"
+              deleteConfirmSubtext="This will delete the category and all its tasks."
             />
-            Assign deadline
-          </label>
-          <DeadlinePickerBox
-            value={props.deadlineDraft.value}
-            disabled={!props.deadlineDraft.enabled}
-            onChange={(value) => props.onDeadlineDraft({ ...props.deadlineDraft, value })}
-            className="flex-1"
-          />
+          </div>
         </div>
       </div>
+
+      {/* ── Task list + add input (collapsible) ─────────────────────── */}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            id={`category-body-${props.category.key}`}
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 32, mass: 0.8 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="p-4">
+              <div className="space-y-2.5">
+                {props.tasks.map((task) => (
+                  <TaskItem
+                    key={task._id}
+                    task={task}
+                    category={props.category}
+                    highlightTaskIds={props.highlightTaskIds}
+                    pending={props.pending}
+                    onUpdate={props.onUpdate}
+                    onDelete={props.onDelete}
+                    onDrag={props.onDrag}
+                    onDrop={props.onDrop}
+                    debouncedTaskTitle={props.debouncedTaskTitle}
+                    dragging={props.dragging}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={props.firstInput}
+                    value={props.draft}
+                    placeholder="+ Add Task"
+                    onChange={(event) => props.onDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") props.onAdd();
+                    }}
+                  />
+                  <Button variant="subtle" size="icon" onClick={props.onAdd} disabled={props.pending}>
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="flex items-center gap-2 text-xs font-medium text-zinc-500">
+                    <input
+                      type="checkbox"
+                      checked={props.deadlineDraft.enabled}
+                      onChange={(event) => props.onDeadlineDraft({ ...props.deadlineDraft, enabled: event.target.checked })}
+                      className="size-4 rounded border-zinc-300"
+                    />
+                    Assign deadline
+                  </label>
+                  <DeadlinePickerBox
+                    value={props.deadlineDraft.value}
+                    disabled={!props.deadlineDraft.enabled}
+                    onChange={(value) => props.onDeadlineDraft({ ...props.deadlineDraft, value })}
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Card>
   );
 }
+
 
 function TaskDeadlineControls({
   task,

@@ -1,5 +1,6 @@
 export function isoDate(date = new Date()) {
-  return date.toISOString().slice(0, 10);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
 export function prettyDate(value: string | Date, style: "long" | "short" = "long") {
