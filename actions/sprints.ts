@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { DEFAULT_CATEGORIES } from "@/lib/constants";
+import { DEFAULT_CATEGORIES, SPRINT_RULES } from "@/lib/constants";
 import { connectDB } from "@/lib/db";
-import { serializeCategory, serializeSprint } from "@/lib/serializers";
-import { categoryInputSchema, categoryUpdateSchema, reorderSchema, sprintUpdateSchema, taskInputSchema, taskUpdateSchema } from "@/lib/validations";
+import { serializeCategory, serializeSprint, serializeRule } from "@/lib/serializers";
+import { categoryInputSchema, categoryUpdateSchema, reorderSchema, sprintUpdateSchema, taskInputSchema, taskUpdateSchema, ruleInputSchema, ruleUpdateSchema } from "@/lib/validations";
 import { Category as CategoryModel } from "@/models/Category";
+import { Rule as RuleModel } from "@/models/Rule";
 import { Sprint } from "@/models/Sprint";
 import { Task } from "@/models/Task";
-import type { AnalyticsData, Category, CategoryDTO, SprintDTO } from "@/types/sprint";
+import type { AnalyticsData, Category, CategoryDTO, SprintDTO, RuleDTO } from "@/types/sprint";
 import { isoDate } from "@/utils/date";
 import { calculateProductivity } from "@/utils/productivity";
 
@@ -57,6 +58,13 @@ export async function getCategories(): Promise<CategoryDTO[]> {
   return docs.map(serializeCategory);
 }
 
+export async function getRules(): Promise<RuleDTO[]> {
+  await connectDB();
+  await ensureDefaultRules();
+  const docs = await RuleModel.find().sort({ order: 1 }).lean();
+  return docs.map(serializeRule);
+}
+
 export async function createCategory(input: unknown) {
   await connectDB();
   const { label, tagline, icon, themeId } = categoryInputSchema.parse(input);
@@ -85,6 +93,41 @@ export async function updateCategory(key: string, input: unknown) {
   if (!category) throw new Error("Category not found");
   revalidatePath("/");
   return serializeCategory(category);
+}
+
+export async function createRule(input: unknown) {
+  await connectDB();
+  const { text, icon, themeId } = ruleInputSchema.parse(input);
+  const order = await RuleModel.countDocuments();
+  const rule = await RuleModel.create({
+    text,
+    icon: icon ?? "",
+    themeId: themeId ?? "",
+    order,
+  });
+  revalidatePath("/");
+  return serializeRule(rule.toObject());
+}
+
+export async function updateRule(id: string, input: unknown) {
+  await connectDB();
+  const { text, icon, themeId } = ruleUpdateSchema.parse(input);
+  const rule = await RuleModel.findByIdAndUpdate(
+    id,
+    { text, icon, themeId },
+    { new: true }
+  ).lean();
+  if (!rule) throw new Error("Rule not found");
+  revalidatePath("/");
+  return serializeRule(rule);
+}
+
+export async function deleteRule(id: string) {
+  await connectDB();
+  const rule = await RuleModel.findByIdAndDelete(id).lean();
+  if (!rule) throw new Error("Rule not found");
+  revalidatePath("/");
+  return serializeRule(rule);
 }
 
 export async function deleteCategory(key: string, sprintId?: string) {
@@ -203,6 +246,24 @@ async function ensureDefaultCategories() {
   const count = await CategoryModel.countDocuments();
   if (count > 0) return;
   await CategoryModel.insertMany(DEFAULT_CATEGORIES);
+}
+
+async function ensureDefaultRules() {
+  const count = await RuleModel.countDocuments();
+  if (count > 0) return;
+  const defaultRules = SPRINT_RULES.map((text, index) => {
+    let icon = "CheckCircle";
+    if (text.includes("start")) icon = "Target";
+    else if (text.includes("9 PM")) icon = "Clock";
+    else if (text.includes("deep work")) icon = "ShieldCheck";
+    return {
+      text,
+      icon,
+      themeId: "",
+      order: index,
+    };
+  });
+  await RuleModel.insertMany(defaultRules);
 }
 
 async function uniqueCategoryKey(label: string) {

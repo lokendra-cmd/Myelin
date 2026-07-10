@@ -16,7 +16,7 @@ import { EntityModal } from "@/components/entity/EntityModal";
 import { DynamicIcon } from "@/components/entity/ModalHeader";
 import { OverflowMenu } from "@/components/entity/OverflowMenu";
 import { hashTheme, getThemeById } from "@/lib/themeUtils";
-import { categoryFallback, SPRINT_RULES } from "@/lib/constants";
+import { categoryFallback } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { useShortcuts } from "@/hooks/use-shortcuts";
@@ -49,10 +49,12 @@ const TIME_OPTIONS = [
 export function SprintWorkspace({
   initialSprint,
   initialCategories,
+  initialRules = [],
   quickAdd,
 }: {
   initialSprint: SprintDTO;
   initialCategories: CategoryDTO[];
+  initialRules?: RuleDTO[];
   quickAdd?: boolean;
 }) {
   const [sprint, setSprint] = useState(initialSprint);
@@ -61,8 +63,7 @@ export function SprintWorkspace({
   const [deadlineDraft, setDeadlineDraft] = useState<Record<string, DeadlineDraft>>({});
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
-  const [rules, setRules] = useState<RuleDTO[]>([]);
-  const [rulesLoaded, setRulesLoaded] = useState(false);
+  const [rules, setRules] = useState<RuleDTO[]>(initialRules);
   const [editingRule, setEditingRule] = useState<RuleDTO | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryDTO | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -81,57 +82,6 @@ export function SprintWorkspace({
       localStorage.setItem(`sprint:${sprint._id}`, JSON.stringify(sprint));
     }
   }, [sprint]);
-
-  useEffect(() => {
-    const savedRules = localStorage.getItem("sprint:rules");
-    if (savedRules) {
-      try {
-        const parsed = JSON.parse(savedRules);
-        if (Array.isArray(parsed)) {
-          const migrated = parsed.map((item, index) => {
-            if (typeof item === "string") {
-              let icon = "CheckCircle";
-              if (item.includes("start")) icon = "Target";
-              else if (item.includes("9 PM")) icon = "Clock";
-              else if (item.includes("deep work")) icon = "ShieldCheck";
-              return {
-                id: `default-rule-${index}-${Date.now()}`,
-                text: item,
-                icon,
-                themeId: "",
-              };
-            }
-            return item;
-          });
-          setRules(migrated);
-          setRulesLoaded(true);
-          return;
-        }
-      } catch (err) {
-        console.error("Failed to parse rules", err);
-      }
-    }
-    const defaultObjRules = SPRINT_RULES.map((rule, index) => {
-      let icon = "CheckCircle";
-      if (rule.includes("start")) icon = "Target";
-      else if (rule.includes("9 PM")) icon = "Clock";
-      else if (rule.includes("deep work")) icon = "ShieldCheck";
-      return {
-        id: `default-rule-${index}`,
-        text: rule,
-        icon,
-        themeId: "",
-      };
-    });
-    setRules(defaultObjRules);
-    setRulesLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (rulesLoaded) {
-      localStorage.setItem("sprint:rules", JSON.stringify(rules));
-    }
-  }, [rules, rulesLoaded]);
 
   useShortcuts({
     n: () => firstInput.current?.focus(),
@@ -187,24 +137,38 @@ export function SprintWorkspace({
     saveCategoryName(key, label);
   }
 
-  function handleAddRule(label: string, icon?: string) {
+  async function handleAddRule(label: string, icon?: string) {
     const defaultIcons = ["CheckCircle", "Target", "Sparkles"];
     const chosenIcon = icon || defaultIcons[rules.length % defaultIcons.length];
-    const newRule: RuleDTO = {
-      id: `rule-${Date.now()}`,
-      text: label,
-      icon: chosenIcon,
-    };
+    const themeId = "";
+    const res = await fetch("/api/rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: label, icon: chosenIcon, themeId }),
+    });
+    if (!res.ok) throw new Error("Failed to add rule");
+    const newRule: RuleDTO = await res.json();
     setRules((current) => [...current, newRule]);
   }
 
-  function deleteRule(id: string) {
-    setRules((current) => current.filter((rule) => rule.id !== id));
+  async function deleteRule(id: string) {
+    const res = await fetch(`/api/rules/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete rule");
+    setRules((current) => current.filter((rule) => rule._id !== id && rule.id !== id));
   }
 
-  function handleUpdateRule(id: string, text: string, icon?: string) {
+  async function handleUpdateRule(id: string, text: string, icon?: string) {
+    const res = await fetch(`/api/rules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, icon }),
+    });
+    if (!res.ok) throw new Error("Failed to update rule");
+    const updated: RuleDTO = await res.json();
     setRules((current) =>
-      current.map((rule) => (rule.id === id ? { ...rule, text, icon: icon || rule.icon } : rule))
+      current.map((rule) => (rule._id === id || rule.id === id ? updated : rule))
     );
   }
 
@@ -522,7 +486,7 @@ export function SprintWorkspace({
             defaultIconName="CheckCircle"
             defaultIcon={ShieldCheck}
             onSubmit={async (values) => {
-              handleAddRule(values.label, values.icon);
+              await handleAddRule(values.label, values.icon);
               setRuleModalOpen(false);
             }}
           />
@@ -548,7 +512,7 @@ export function SprintWorkspace({
             }
             onSubmit={async (values) => {
               if (editingRule) {
-                handleUpdateRule(editingRule.id, values.label, values.icon);
+                await handleUpdateRule(editingRule.id, values.label, values.icon);
                 setEditingRule(null);
               }
             }}

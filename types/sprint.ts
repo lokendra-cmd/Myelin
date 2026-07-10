@@ -14,10 +14,14 @@ export type CategoryDTO = {
 };
 
 export type RuleDTO = {
+  _id: string;
   id: string;
   text: string;
   icon?: string;
   themeId?: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TaskDTO = {

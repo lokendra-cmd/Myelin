@@ -52,3 +52,11 @@ export const categoryUpdateSchema = z.object({
   icon: z.string().max(50).optional(),
   themeId: z.string().max(50).optional(),
 });
+
+export const ruleInputSchema = z.object({
+  text: z.string().trim().min(1).max(100),
+  icon: z.string().max(50).optional(),
+  themeId: z.string().max(50).optional(),
+});
+
+export const ruleUpdateSchema = ruleInputSchema.partial();

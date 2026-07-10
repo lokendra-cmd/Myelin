@@ -45,6 +45,23 @@ export function serializeCategory(category: LeanCategory): CategoryDTO {
   };
 }
 
+type LeanRule = Record<string, unknown>;
+
+import type { RuleDTO } from "@/types/sprint";
+
+export function serializeRule(rule: LeanRule): RuleDTO {
+  return {
+    _id: String(rule._id),
+    id: String(rule._id),
+    text: String(rule.text ?? ""),
+    icon: rule.icon ? String(rule.icon) : undefined,
+    themeId: rule.themeId ? String(rule.themeId) : undefined,
+    order: Number(rule.order ?? 0),
+    createdAt: new Date(rule.createdAt as string | Date).toISOString(),
+    updatedAt: new Date(rule.updatedAt as string | Date).toISOString(),
+  };
+}
+
 export function serializeSprint(sprint: LeanSprint, tasks: LeanTask[] = []): SprintDTO {
   const reflection = (sprint.reflection ?? {}) as Record<string, string>;
   return {
