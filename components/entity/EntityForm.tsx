@@ -81,7 +81,7 @@ export function EntityForm({
             ref={(el) => {
               register("label").ref(el);
               if (nameInputRef) {
-                (nameInputRef as any).current = el;
+                (nameInputRef as unknown as React.MutableRefObject<HTMLInputElement | null>).current = el;
               }
             }}
             placeholder={

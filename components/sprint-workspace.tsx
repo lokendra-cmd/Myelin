@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, Calendar, CalendarClock, CalendarDays, Check, ChevronDown, Clock, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, RotateCcw, ShieldCheck, Sparkles, Star, Trash2, X } from "lucide-react";
+import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, FileDown, FileText, GripVertical, History, MoreVertical, Play, Plus, RotateCcw, ShieldCheck, Sparkles, Star, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -208,7 +208,7 @@ export function SprintWorkspace({
     );
   }
 
-  function deleteCategory(key: string, label: string) {
+  function deleteCategory(key: string) {
     startTransition(() => {
       void fetch(`/api/categories/${encodeURIComponent(key)}`, {
         method: "DELETE",
@@ -569,7 +569,7 @@ export function SprintWorkspace({
                 onAdd={() => add(category.key)}
                 onRename={(label) => renameCategory(category.key, label)}
                 onEditCategory={() => setEditingCategory(category)}
-                onDeleteCategory={() => deleteCategory(category.key, category.label)}
+                onDeleteCategory={() => deleteCategory(category.key)}
                 onUpdate={updateTask}
                 onDelete={remove}
                 onDrag={setDragging}
@@ -637,7 +637,6 @@ function TaskItem({
   task,
   category,
   highlightTaskIds,
-  pending,
   onUpdate,
   onDelete,
   onDrag,
@@ -648,7 +647,6 @@ function TaskItem({
   task: TaskDTO;
   category: CategoryDTO;
   highlightTaskIds: string[];
-  pending: boolean;
   onUpdate: (taskId: string, updates: Partial<TaskDTO> & { highlight?: boolean }) => void;
   onDelete: (taskId: string) => void;
   onDrag: (taskId: string | null) => void;
@@ -1140,7 +1138,6 @@ function TaskSection(props: {
                     task={task}
                     category={props.category}
                     highlightTaskIds={props.highlightTaskIds}
-                    pending={props.pending}
                     onUpdate={props.onUpdate}
                     onDelete={props.onDelete}
                     onDrag={props.onDrag}
@@ -1192,43 +1189,7 @@ function TaskSection(props: {
 }
 
 
-function TaskDeadlineControls({
-  task,
-  onUpdate,
-}: {
-  task: TaskDTO;
-  onUpdate: (taskId: string, updates: Partial<TaskDTO> & { highlight?: boolean }) => void;
-}) {
-  if (!task.deadlineAt) {
-    return (
-      <button
-        title="Add deadline"
-        onClick={() => onUpdate(task._id, { deadlineAt: deadlineDraftToIso({ ...defaultDeadlineDraft(task.category), enabled: true }) })}
-        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-dashed border-zinc-200 px-3 text-xs font-medium text-zinc-500 hover:border-zinc-300 hover:text-zinc-950 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:text-zinc-50"
-      >
-        <CalendarClock className="size-4" />
-        Add deadline
-      </button>
-    );
-  }
 
-  const deadlineAt = task.deadlineAt;
-
-  return (
-    <div className="flex flex-col gap-3 rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-950 sm:flex-row sm:items-center">
-      <DeadlineMeter deadlineAt={deadlineAt} completed={task.completed} />
-      <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto] gap-1">
-        <DeadlinePickerBox
-          value={dateTimeInputValue(deadlineAt)}
-          onChange={(value) => onUpdate(task._id, { deadlineAt: dateTimeInputToIso(value) })}
-        />
-        <button title="Clear deadline" onClick={() => onUpdate(task._id, { deadlineAt: null })} className="grid size-8 place-items-center text-zinc-300 hover:text-red-500">
-          <X className="size-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function DeadlinePickerBox({
   value,
@@ -1354,37 +1315,6 @@ function DeadlinePickerBox({
   );
 }
 
-function DeadlineMeter({ deadlineAt, completed }: { deadlineAt: string; completed: boolean }) {
-  const deadline = new Date(deadlineAt);
-  const remainingMs = deadline.getTime() - Date.now();
-  const overdue = remainingMs < 0 && !completed;
-  const hours = Math.max(0, Math.ceil(remainingMs / 3_600_000));
-  const progress = completed ? 100 : overdue ? 0 : Math.min(100, Math.max(0, (remainingMs / 86_400_000) * 100));
-  const radius = 18;
-  const circumference = 2 * Math.PI * radius;
-  const label = completed ? "Done" : overdue ? "Late" : hours > 99 ? "99h+" : hours < 1 ? "<1h" : `${hours}h`;
-
-  return (
-    <div className="relative grid size-12 shrink-0 place-items-center">
-      <svg className="size-12 -rotate-90" viewBox="0 0 44 44" aria-hidden="true">
-        <circle cx="22" cy="22" r={radius} fill="none" stroke="currentColor" strokeWidth="4" className="text-zinc-200 dark:text-zinc-800" />
-        <circle
-          cx="22"
-          cy="22"
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeWidth="4"
-          strokeDasharray={circumference}
-          strokeDashoffset={circumference - (progress / 100) * circumference}
-          className={cn(completed ? "text-emerald-500" : overdue ? "text-red-500" : "text-amber-500")}
-        />
-      </svg>
-      <span className={cn("absolute text-[10px] font-semibold leading-none", overdue ? "text-red-500" : "text-zinc-700 dark:text-zinc-200")}>{label}</span>
-    </div>
-  );
-}
 
 function defaultDeadlineDraft(category: Category): DeadlineDraft {
   return {
@@ -1403,11 +1333,6 @@ function dateTimeInputToIso(value: string) {
   return new Date(value).toISOString();
 }
 
-function dateTimeInputValue(value: string) {
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
 
 function parseDateTimeInput(value: string): ParsedDateTime {
   const fallback = `${todayInputValue()}T23:59`;

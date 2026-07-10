@@ -16,10 +16,13 @@ export function serializeTask(task: LeanTask): TaskDTO {
     startedAt: task.startedAt ? new Date(task.startedAt as string | Date).toISOString() : null,
     completedAt: task.completedAt ? new Date(task.completedAt as string | Date).toISOString() : null,
     history: Array.isArray(task.history)
-      ? task.history.map((h: any) => ({
-          startedAt: new Date(h.startedAt).toISOString(),
-          completedAt: new Date(h.completedAt).toISOString(),
-        }))
+      ? task.history.map((h: unknown) => {
+          const item = h as Record<string, unknown>;
+          return {
+            startedAt: new Date(item.startedAt as string | Date).toISOString(),
+            completedAt: new Date(item.completedAt as string | Date).toISOString(),
+          };
+        })
       : [],
     order: Number(task.order ?? 0),
     createdAt: new Date(task.createdAt as string | Date).toISOString(),

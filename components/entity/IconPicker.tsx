@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Anchor, Archive, Award, BarChart2, Battery, Bell, Book,
-  BookOpen, Brain, Briefcase, Camera, Car, Check, Circle, Clipboard,
+  BookOpen, Brain, Briefcase, Camera, Car, Clipboard,
   Clock, Cloud, Code, Coffee, Compass, CreditCard, Dumbbell,
   Edit3, Eye, Feather, FileText, Film, Flame, Folder, Globe,
   GraduationCap, Grid, Hammer, Heart, Home, Image, Inbox,
@@ -257,7 +257,7 @@ export function IconPicker({
         aria-label="Icon grid"
       >
         {filtered.length === 0 && (
-          <p className="col-span-6 py-6 text-center text-xs text-zinc-400">No icons match "{search}"</p>
+          <p className="col-span-6 py-6 text-center text-xs text-zinc-400">No icons match &quot;{search}&quot;</p>
         )}
         {filtered.map(([Icon, name], idx) => {
           const isSelected = value === name;
