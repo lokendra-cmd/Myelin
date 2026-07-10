@@ -12,6 +12,7 @@ export function serializeTask(task: LeanTask): TaskDTO {
     category: task.category as TaskDTO["category"],
     completed: Boolean(task.completed),
     isRecurring: Boolean(task.isRecurring),
+    recurringDays: Array.isArray(task.recurringDays) ? (task.recurringDays as number[]).map(Number) : [],
     deadlineAt: task.deadlineAt ? new Date(task.deadlineAt as string | Date).toISOString() : null,
     startedAt: task.startedAt ? new Date(task.startedAt as string | Date).toISOString() : null,
     completedAt: task.completedAt ? new Date(task.completedAt as string | Date).toISOString() : null,

@@ -15,6 +15,7 @@ import { ProgressRing } from "@/components/progress-ring";
 import { EntityModal } from "@/components/entity/EntityModal";
 import { DynamicIcon } from "@/components/entity/ModalHeader";
 import { OverflowMenu } from "@/components/entity/OverflowMenu";
+import { RecurringDialog } from "@/components/tasks/RecurringDialog";
 import { hashTheme, getThemeById } from "@/lib/themeUtils";
 import { categoryFallback } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ export function SprintWorkspace({
   const [rules, setRules] = useState<RuleDTO[]>(initialRules);
   const [editingRule, setEditingRule] = useState<RuleDTO | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryDTO | null>(null);
+  const [recurringTask, setRecurringTask] = useState<TaskDTO | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -518,6 +520,22 @@ export function SprintWorkspace({
             }}
           />
 
+          {/* Recurring Task Dialog */}
+          <RecurringDialog
+            task={recurringTask}
+            open={!!recurringTask}
+            onOpenChange={(open) => {
+              if (!open) setRecurringTask(null);
+            }}
+            onSave={async (recurringDays) => {
+              if (recurringTask) {
+                const isRecurring = recurringDays.length > 0;
+                await updateTask(recurringTask._id, { isRecurring, recurringDays });
+                setRecurringTask(null);
+              }
+            }}
+          />
+
           <div className="space-y-6">
             {visibleCategories.map((category, index) => (
               <TaskSection
@@ -543,6 +561,7 @@ export function SprintWorkspace({
                 activeMenuId={activeMenuId}
                 onActiveMenuIdChange={setActiveMenuId}
                 debouncedTaskTitle={debouncedTaskTitle}
+                onConfigureRecurring={setRecurringTask}
               />
             ))}
           </div>
@@ -607,6 +626,7 @@ function TaskItem({
   onDrop,
   debouncedTaskTitle,
   dragging,
+  onConfigureRecurring,
 }: {
   task: TaskDTO;
   category: CategoryDTO;
@@ -617,6 +637,7 @@ function TaskItem({
   onDrop: (category: Category, targetId?: string) => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
   dragging: string | null;
+  onConfigureRecurring: (task: TaskDTO) => void;
 }) {
   const isCompleted = task.completed;
   const isInProgress = !task.completed && !!task.startedAt;
@@ -800,7 +821,7 @@ function TaskItem({
                   )}
                   <button
                     title="Recurring"
-                    onClick={() => onUpdate(task._id, { isRecurring: !task.isRecurring })}
+                    onClick={() => onConfigureRecurring(task)}
                     className={cn("p-1 hover:text-zinc-950 dark:hover:text-zinc-50 transition", task.isRecurring && "text-zinc-950 dark:text-zinc-50")}
                   >
                     ↻
@@ -992,6 +1013,7 @@ function TaskSection(props: {
   onDrag: (taskId: string | null) => void;
   onDrop: (category: Category, targetId?: string) => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
+  onConfigureRecurring: (task: TaskDTO) => void;
 }) {
   // Resolve theme — prefer stored themeId, fall back to deterministic hash
   const theme = props.category.themeId
@@ -1108,6 +1130,7 @@ function TaskSection(props: {
                     onDrop={props.onDrop}
                     debouncedTaskTitle={props.debouncedTaskTitle}
                     dragging={props.dragging}
+                    onConfigureRecurring={props.onConfigureRecurring}
                   />
                 ))}
               </div>

@@ -171,15 +171,24 @@ export async function createSprint(date = isoDate()) {
   const title = `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${date}T00:00:00`))}`;
   const sprint = await Sprint.create({ date, title, highlightTaskIds: [] });
   const recurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
+  const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
 
-  if (recurring.length) {
+  const tasksToDuplicate = recurring.filter((task) => {
+    if (!task.recurringDays || task.recurringDays.length === 0) {
+      return true;
+    }
+    return task.recurringDays.includes(dayOfWeek);
+  });
+
+  if (tasksToDuplicate.length) {
     await Task.insertMany(
-      recurring.map((task, index) => ({
+      tasksToDuplicate.map((task, index) => ({
         sprintId: sprint._id,
         title: task.title,
         category: task.category,
         completed: false,
         isRecurring: true,
+        recurringDays: task.recurringDays || [],
         order: index,
       })),
     );

@@ -5,6 +5,7 @@ export const taskInputSchema = z.object({
   category: z.string().trim().min(1).max(48),
   completed: z.boolean().optional(),
   isRecurring: z.boolean().optional(),
+  recurringDays: z.array(z.number().min(0).max(6)).optional(),
   deadlineAt: z.string().datetime().nullable().optional(),
   startedAt: z.string().datetime().nullable().optional(),
   completedAt: z.string().datetime().nullable().optional(),

@@ -7,6 +7,7 @@ const TaskSchema = new Schema(
     category: { type: String, required: true, index: true, trim: true },
     completed: { type: Boolean, default: false },
     isRecurring: { type: Boolean, default: false },
+    recurringDays: { type: [Number], default: [] },
     deadlineAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
