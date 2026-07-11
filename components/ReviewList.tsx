@@ -85,7 +85,7 @@ export function ReviewList({ initialSprints }: ReviewListProps) {
                       e.stopPropagation();
                       setSprintToDelete(sprint._id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 grid size-8 place-items-center rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-400 hover:text-red-650 dark:text-zinc-500 dark:hover:text-red-400 transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="grid size-8 place-items-center rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-zinc-400 hover:text-red-600 dark:text-zinc-500 dark:hover:text-red-400 transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
                     title="Delete Day"
                   >
                     <Trash2 className="size-4" />
@@ -165,7 +165,7 @@ export function ReviewList({ initialSprints }: ReviewListProps) {
                         type="button"
                         disabled={isPending}
                         onClick={() => handleDelete(sprintToDelete)}
-                        className="px-4 py-2 rounded-xl bg-red-650 hover:bg-red-700 active:bg-red-850 text-sm font-semibold text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-sm font-semibold text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
                       >
                         {isPending ? "Deleting..." : "Delete Day"}
                       </button>
