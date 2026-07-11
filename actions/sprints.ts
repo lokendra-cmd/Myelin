@@ -170,10 +170,21 @@ export async function createSprint(date = isoDate()) {
 
   const title = `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${date}T00:00:00`))}`;
   const sprint = await Sprint.create({ date, title, highlightTaskIds: [] });
-  const recurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
   const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
 
-  const tasksToDuplicate = recurring.filter((task) => {
+  // Fetch ALL recurring tasks but deduplicate by (title, category) so that copies-of-copies
+  // from previous sprints don't compound. We keep the first occurrence of each unique task.
+  const allRecurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
+
+  const seen = new Set<string>();
+  const uniqueRecurring = allRecurring.filter((task) => {
+    const key = `${task.category}::${task.title.trim().toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const tasksToDuplicate = uniqueRecurring.filter((task) => {
     if (!task.recurringDays || task.recurringDays.length === 0) {
       return true;
     }
@@ -198,6 +209,7 @@ export async function createSprint(date = isoDate()) {
   revalidatePath("/");
   return sprintWithTasks(String(sprint._id));
 }
+
 
 export async function getDashboardData() {
   await connectDB();
