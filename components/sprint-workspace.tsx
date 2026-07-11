@@ -829,33 +829,27 @@ function TaskItem({
                   </motion.button>
 
                   {/* Deadline Button */}
-                  <motion.button
-                    type="button"
-                    title={task.deadlineAt ? "Clear Deadline" : "Add Deadline"}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.15, ease: "easeInOut" }}
-                    onClick={() => {
-                      if (task.deadlineAt) {
-                        onUpdate(task._id, { deadlineAt: null });
-                      } else {
-                        onUpdate(task._id, {
-                          deadlineAt: deadlineDraftToIso({
-                            ...defaultDeadlineDraft(category.key),
-                            enabled: true,
-                          }),
-                        });
-                      }
-                    }}
-                    className={cn(
-                      "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
-                      task.deadlineAt
-                        ? "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
-                        : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-violet-400"
-                    )}
-                  >
-                    <Calendar className="size-4 stroke-[2]" />
-                  </motion.button>
+                  <DeadlinePickerBox
+                    value={task.deadlineAt ? dateTimeInputValue(task.deadlineAt) : ""}
+                    onChange={(value) => onUpdate(task._id, { deadlineAt: dateTimeInputToIso(value) })}
+                    customTrigger={
+                      <motion.button
+                        type="button"
+                        title={task.deadlineAt ? "Change Deadline" : "Add Deadline"}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.97 }}
+                        transition={{ duration: 0.15, ease: "easeInOut" }}
+                        className={cn(
+                          "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
+                          task.deadlineAt
+                            ? "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
+                            : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-violet-400"
+                        )}
+                      >
+                        <Calendar className="size-4 stroke-[2]" />
+                      </motion.button>
+                    }
+                  />
 
                   {/* Highlight Button */}
                   <motion.button
@@ -1230,11 +1224,13 @@ function DeadlinePickerBox({
   disabled = false,
   onChange,
   className,
+  customTrigger,
 }: {
   value: string;
   disabled?: boolean;
   onChange: (value: string) => void;
   className?: string;
+  customTrigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const safeValue = value || `${todayInputValue()}T23:59`;
@@ -1248,15 +1244,21 @@ function DeadlinePickerBox({
 
   return (
     <div className={cn("relative min-w-0", disabled && "opacity-40", className)}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-left text-xs text-zinc-700 outline-none transition hover:border-zinc-300 disabled:cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-zinc-700"
-      >
-        <CalendarClock className="size-4 shrink-0 text-zinc-400" />
-        <span className="min-w-0 flex-1 truncate">{formatDateTimeInput(safeValue)}</span>
-      </button>
+      {customTrigger ? (
+        <div onClick={() => !disabled && setOpen((current) => !current)}>
+          {customTrigger}
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen((current) => !current)}
+          className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-left text-xs text-zinc-700 outline-none transition hover:border-zinc-300 disabled:cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-zinc-700"
+        >
+          <CalendarClock className="size-4 shrink-0 text-zinc-400" />
+          <span className="min-w-0 flex-1 truncate">{formatDateTimeInput(safeValue)}</span>
+        </button>
+      )}
       {open && !disabled && typeof document !== "undefined" &&
         createPortal(
           <>
@@ -1334,9 +1336,25 @@ function DeadlinePickerBox({
             </div>
 
             <div className="mt-4 flex justify-between gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => update({ time: "23:59" })}>
-                EOD
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => update({ time: "23:59" })}>
+                  EOD
+                </Button>
+                {value && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-650 hover:bg-red-50 dark:hover:bg-red-950/20"
+                    onClick={() => {
+                      onChange("");
+                      setOpen(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
               <Button type="button" variant="subtle" size="sm" onClick={() => setOpen(false)}>
                 Done
               </Button>
@@ -1365,6 +1383,13 @@ function deadlineDraftToIso(draft: DeadlineDraft) {
 function dateTimeInputToIso(value: string) {
   if (!value) return null;
   return new Date(value).toISOString();
+}
+
+function dateTimeInputValue(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 
