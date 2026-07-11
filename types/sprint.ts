@@ -8,6 +8,7 @@ export type CategoryDTO = {
   tagline?: string;
   themeId?: string;
   icon?: string;
+  isBrainDump?: boolean;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -76,3 +77,13 @@ export type AnalyticsData = {
   bestDay: SprintDTO | null;
   worstDay: SprintDTO | null;
 };
+
+export type BrainDumpThoughtDTO = {
+  _id: string;
+  text: string;
+  category: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+};
+

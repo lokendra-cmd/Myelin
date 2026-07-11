@@ -45,6 +45,7 @@ export const categoryInputSchema = z.object({
   tagline: z.string().max(80).optional(),
   icon: z.string().max(50).optional(),
   themeId: z.string().max(50).optional(),
+  isBrainDump: z.boolean().optional(),
 });
 
 export const categoryUpdateSchema = z.object({
@@ -52,6 +53,7 @@ export const categoryUpdateSchema = z.object({
   tagline: z.string().max(80).optional(),
   icon: z.string().max(50).optional(),
   themeId: z.string().max(50).optional(),
+  isBrainDump: z.boolean().optional(),
 });
 
 export const ruleInputSchema = z.object({

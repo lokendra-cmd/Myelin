@@ -42,6 +42,7 @@ export function EntityModal({
       label: "",
       tagline: "",
       icon: "",
+      isBrainDump: false,
     },
   });
 
@@ -62,6 +63,7 @@ export function EntityModal({
           label: "",
           tagline: "",
           icon: "",
+          isBrainDump: false,
         }
       );
       setTimeout(() => {

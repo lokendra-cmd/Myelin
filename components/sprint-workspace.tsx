@@ -145,7 +145,7 @@ export function SprintWorkspace({
   async function handleAddRule(label: string, icon?: string) {
     const defaultIcons = ["CheckCircle", "Target", "Sparkles"];
     const chosenIcon = icon || defaultIcons[rules.length % defaultIcons.length];
-    const themeId = "";
+    const themeId = hashTheme(label).id;
     const res = await fetch("/api/rules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -165,10 +165,12 @@ export function SprintWorkspace({
   }
 
   async function handleUpdateRule(id: string, text: string, icon?: string) {
+    const ruleToUpdate = rules.find((r) => r._id === id || r.id === id);
+    const themeId = ruleToUpdate?.themeId || hashTheme(text).id;
     const res = await fetch(`/api/rules/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, icon }),
+      body: JSON.stringify({ text, icon, themeId }),
     });
     if (!res.ok) throw new Error("Failed to update rule");
     const updated: RuleDTO = await res.json();
@@ -239,9 +241,16 @@ export function SprintWorkspace({
   }
 
   const visibleCategories = useMemo(() => {
-    const map = new Map(categories.map((category) => [category.key, category]));
+    const map = new Map(
+      categories
+        .filter((c) => !c.isBrainDump)
+        .map((category) => [category.key, category])
+    );
     for (const task of sprint.tasks) {
-      if (!map.has(task.category)) map.set(task.category, categoryFallback(task.category));
+      if (!map.has(task.category)) {
+        const fb = categoryFallback(task.category);
+        if (!fb.isBrainDump) map.set(task.category, fb);
+      }
     }
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   }, [categories, sprint.tasks]);
@@ -427,6 +436,7 @@ export function SprintWorkspace({
                     label: editingCategory.label,
                     tagline: editingCategory.tagline || "",
                     icon: editingCategory.icon || "",
+                    isBrainDump: !!editingCategory.isBrainDump,
                   }
                 : null
             }
@@ -437,6 +447,7 @@ export function SprintWorkspace({
                   tagline: values.tagline || "",
                   icon: values.icon,
                   themeId: editingCategory.themeId || hashTheme(values.label).id,
+                  isBrainDump: !!values.isBrainDump,
                 };
                 const res = await fetch(`/api/categories/${encodeURIComponent(editingCategory.key)}`, {
                   method: "PATCH",
@@ -456,6 +467,7 @@ export function SprintWorkspace({
                           tagline: updated.tagline,
                           icon: updated.icon,
                           themeId: updated.themeId,
+                          isBrainDump: updated.isBrainDump,
                         }
                       : cat
                   )
@@ -467,6 +479,7 @@ export function SprintWorkspace({
                   tagline: values.tagline || "",
                   icon: values.icon,
                   themeId: hashTheme(values.label).id,
+                  isBrainDump: !!values.isBrainDump,
                 };
                 const res = await fetch("/api/categories", {
                   method: "POST",

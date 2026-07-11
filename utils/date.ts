@@ -4,7 +4,11 @@ export function isoDate(date = new Date()) {
 }
 
 export function prettyDate(value: string | Date, style: "long" | "short" = "long") {
+  if (!value) return "";
   const date = typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
+  if (isNaN(date.getTime())) {
+    return typeof value === "string" ? value : "";
+  }
   return new Intl.DateTimeFormat("en", {
     weekday: style === "long" ? "long" : undefined,
     month: "short",

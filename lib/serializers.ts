@@ -1,4 +1,4 @@
-import type { CategoryDTO, SprintDTO, TaskDTO } from "@/types/sprint";
+import type { CategoryDTO, SprintDTO, TaskDTO, BrainDumpThoughtDTO } from "@/types/sprint";
 
 type LeanTask = Record<string, unknown>;
 type LeanSprint = Record<string, unknown>;
@@ -40,6 +40,7 @@ export function serializeCategory(category: LeanCategory): CategoryDTO {
     tagline: category.tagline ? String(category.tagline) : undefined,
     themeId: category.themeId ? String(category.themeId) : undefined,
     icon: category.icon ? String(category.icon) : undefined,
+    isBrainDump: Boolean(category.isBrainDump),
     order: Number(category.order ?? 0),
     createdAt: new Date(category.createdAt as string | Date).toISOString(),
     updatedAt: new Date(category.updatedAt as string | Date).toISOString(),
@@ -85,5 +86,16 @@ export function serializeSprint(sprint: LeanSprint, tasks: LeanTask[] = []): Spr
     createdAt: new Date(sprint.createdAt as string | Date).toISOString(),
     updatedAt: new Date(sprint.updatedAt as string | Date).toISOString(),
     tasks: tasks.map(serializeTask).sort((a, b) => a.order - b.order),
+  };
+}
+
+export function serializeBrainDumpThought(thought: LeanTask): BrainDumpThoughtDTO {
+  return {
+    _id: String(thought._id),
+    text: String(thought.text ?? ""),
+    category: String(thought.category ?? ""),
+    order: Number(thought.order ?? 0),
+    createdAt: new Date(thought.createdAt as string | Date).toISOString(),
+    updatedAt: new Date(thought.updatedAt as string | Date).toISOString(),
   };
 }

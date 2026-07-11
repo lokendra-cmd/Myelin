@@ -1,15 +1,17 @@
 "use server";
 
+import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
 import { DEFAULT_CATEGORIES, SPRINT_RULES } from "@/lib/constants";
 import { connectDB } from "@/lib/db";
-import { serializeCategory, serializeSprint, serializeRule } from "@/lib/serializers";
+import { serializeCategory, serializeSprint, serializeRule, serializeBrainDumpThought } from "@/lib/serializers";
 import { categoryInputSchema, categoryUpdateSchema, reorderSchema, sprintUpdateSchema, taskInputSchema, taskUpdateSchema, ruleInputSchema, ruleUpdateSchema } from "@/lib/validations";
 import { Category as CategoryModel } from "@/models/Category";
 import { Rule as RuleModel } from "@/models/Rule";
 import { Sprint } from "@/models/Sprint";
 import { Task } from "@/models/Task";
-import type { AnalyticsData, Category, CategoryDTO, SprintDTO, RuleDTO } from "@/types/sprint";
+import { BrainDumpThought } from "@/models/BrainDumpThought";
+import type { AnalyticsData, Category, CategoryDTO, SprintDTO, RuleDTO, BrainDumpThoughtDTO } from "@/types/sprint";
 import { isoDate } from "@/utils/date";
 import { calculateProductivity } from "@/utils/productivity";
 
@@ -67,7 +69,7 @@ export async function getRules(): Promise<RuleDTO[]> {
 
 export async function createCategory(input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId } = categoryInputSchema.parse(input);
+  const { label, tagline, icon, themeId, isBrainDump } = categoryInputSchema.parse(input);
   const order = await CategoryModel.countDocuments();
   const category = await CategoryModel.create({
     key: await uniqueCategoryKey(label),
@@ -76,6 +78,7 @@ export async function createCategory(input: unknown) {
     tagline: tagline ?? "",
     icon: icon ?? "",
     themeId: themeId ?? "",
+    isBrainDump: isBrainDump ?? false,
     order,
   });
   revalidatePath("/");
@@ -84,10 +87,10 @@ export async function createCategory(input: unknown) {
 
 export async function updateCategory(key: string, input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId } = categoryUpdateSchema.parse(input);
+  const { label, tagline, icon, themeId, isBrainDump } = categoryUpdateSchema.parse(input);
   const category = await CategoryModel.findOneAndUpdate(
     { key },
-    { label, tagline, icon, themeId },
+    { label, tagline, icon, themeId, isBrainDump },
     { new: true }
   ).lean();
   if (!category) throw new Error("Category not found");
@@ -142,6 +145,7 @@ export async function deleteCategory(key: string, sprintId?: string) {
   const affectedSprintIds = Array.from(new Set(affectedTasks.map((task) => String(task.sprintId))));
 
   await Task.deleteMany({ category: key });
+  await BrainDumpThought.deleteMany({ category: key });
 
   await Promise.all(
     affectedSprintIds.map(async (sprintId) => {
@@ -213,7 +217,7 @@ export async function createSprint(date = isoDate()) {
 
 export async function getDashboardData() {
   await connectDB();
-  const recentDocs = await Sprint.find().sort({ date: -1 }).limit(7).lean();
+  const recentDocs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: -1 }).limit(7).lean();
   const recent = await Promise.all(
     recentDocs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())),
   );
@@ -223,7 +227,7 @@ export async function getDashboardData() {
 
 export async function getWeeklyReview() {
   await connectDB();
-  const docs = await Sprint.find().sort({ date: -1 }).limit(14).lean();
+  const docs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: -1 }).limit(14).lean();
   return Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
 }
 
@@ -240,7 +244,7 @@ export async function deleteSprintAction(sprintId: string) {
 export async function getAnalytics(): Promise<AnalyticsData> {
   await connectDB();
   const categories = await getCategories();
-  const docs = await Sprint.find().sort({ date: 1 }).limit(31).lean();
+  const docs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: 1 }).limit(31).lean();
   const sprints = await Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
   const categoryLabels = new Map(categories.map((category) => [category.key, category.label]));
   const categoryMap = new Map<Category, { completed: number; total: number }>(categories.map((category) => [category.key, { completed: 0, total: 0 }]));
@@ -397,6 +401,7 @@ export async function searchSprints(query: string) {
   await connectDB();
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const docs = await Sprint.find({
+    date: { $ne: "braindump" },
     $or: [{ title: new RegExp(escaped, "i") }, { date: new RegExp(escaped, "i") }],
   })
     .sort({ date: -1 })
@@ -414,4 +419,112 @@ function getStreak(sprints: SprintDTO[]) {
     cursor.setDate(cursor.getDate() - 1);
   }
   return streak;
+}
+
+export async function getBrainDumpSprint(): Promise<SprintDTO> {
+  await connectDB();
+  const date = "braindump";
+  let sprint = await Sprint.findOne({ date }).lean();
+  if (!sprint) {
+    const doc = await Sprint.create({
+      date,
+      title: "Brain Dump",
+      completedTasks: 0,
+      totalTasks: 0,
+      productivity: 0,
+      highlightTaskIds: [],
+    });
+    sprint = doc.toObject();
+  }
+  const tasks = await Task.find({ sprintId: sprint._id }).sort({ category: 1, order: 1 }).lean();
+  return serializeSprint(sprint, tasks);
+}
+
+export async function moveTaskToToday(taskId: string, targetCategory: string) {
+  await connectDB();
+  const todaySprint = await createSprint(isoDate());
+  if (!todaySprint) throw new Error("Could not find or create today's sprint");
+
+  const task = await Task.findById(taskId);
+  if (!task) throw new Error("Task not found");
+
+  const oldSprintId = task.sprintId;
+  task.sprintId = new mongoose.Types.ObjectId(todaySprint._id) as unknown as mongoose.Types.ObjectId;
+  task.category = targetCategory;
+
+  const order = await Task.countDocuments({ sprintId: todaySprint._id, category: targetCategory });
+  task.order = order;
+  await task.save();
+
+  // Recalculate productivity of both sprints
+  await recalculateSprint(String(oldSprintId));
+  await recalculateSprint(String(todaySprint._id));
+
+  revalidatePath("/");
+  revalidatePath("/brain-dump");
+  return { success: true };
+}
+
+export async function getBrainDumpThoughts(): Promise<BrainDumpThoughtDTO[]> {
+  await connectDB();
+  const docs = await BrainDumpThought.find().sort({ order: 1 }).lean();
+  return docs.map(serializeBrainDumpThought);
+}
+
+export async function createBrainDumpThought(text: string, category: string): Promise<BrainDumpThoughtDTO> {
+  await connectDB();
+  const count = await BrainDumpThought.countDocuments({ category });
+  const doc = await BrainDumpThought.create({
+    text,
+    category,
+    order: count,
+  });
+  revalidatePath("/brain-dump");
+  return serializeBrainDumpThought(doc.toObject());
+}
+
+export async function updateBrainDumpThought(id: string, text: string): Promise<BrainDumpThoughtDTO> {
+  await connectDB();
+  const doc = await BrainDumpThought.findByIdAndUpdate(id, { text }, { new: true }).lean();
+  if (!doc) throw new Error("Thought not found");
+  revalidatePath("/brain-dump");
+  return serializeBrainDumpThought(doc);
+}
+
+export async function deleteBrainDumpThought(id: string): Promise<{ success: boolean }> {
+  await connectDB();
+  await BrainDumpThought.findByIdAndDelete(id);
+  revalidatePath("/brain-dump");
+  return { success: true };
+}
+
+export async function convertThoughtToTask(thoughtId: string, targetCategory: string): Promise<{ success: boolean }> {
+  await connectDB();
+  const thought = await BrainDumpThought.findById(thoughtId);
+  if (!thought) throw new Error("Thought not found");
+
+  const todaySprint = await createSprint(isoDate());
+  if (!todaySprint) throw new Error("Could not find or create today's sprint");
+
+  const maxOrderTask = await Task.findOne({ sprintId: todaySprint._id, category: targetCategory })
+    .sort({ order: -1 })
+    .lean();
+  const nextOrder = maxOrderTask ? maxOrderTask.order + 1 : 0;
+
+  await Task.create({
+    sprintId: todaySprint._id,
+    title: thought.text,
+    category: targetCategory,
+    completed: false,
+    order: nextOrder,
+  });
+
+  await BrainDumpThought.findByIdAndDelete(thoughtId);
+
+  // Recalculate tasks count on today's sprint
+  await recalculateSprint(String(todaySprint._id));
+
+  revalidatePath("/");
+  revalidatePath("/brain-dump");
+  return { success: true };
 }
