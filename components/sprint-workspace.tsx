@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, FileDown, FileText, GripVertical, History, MoreVertical, Play, Plus, RotateCcw, ShieldCheck, Sparkles, Star, Trash2, X } from "lucide-react";
+import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, FileDown, FileText, GripVertical, History, MoreVertical, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -807,39 +807,86 @@ function TaskItem({
             )}
             
             {/* Control / Dropdown Row */}
-            <div className="flex items-center gap-0.5 text-zinc-400 dark:text-zinc-600 relative">
+            <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-650 relative">
               {!isCompleted ? (
                 <>
-                  {task.deadlineAt && (
-                    <button
-                      title="Clear deadline"
-                      onClick={() => onUpdate(task._id, { deadlineAt: null })}
-                      className="p-1 hover:text-red-500 transition"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  )}
-                  <button
+                  {/* Recurring Button */}
+                  <motion.button
+                    type="button"
                     title="Recurring"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
                     onClick={() => onConfigureRecurring(task)}
-                    className={cn("p-1 hover:text-zinc-950 dark:hover:text-zinc-50 transition", task.isRecurring && "text-zinc-950 dark:text-zinc-50")}
+                    className={cn(
+                      "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
+                      task.isRecurring
+                        ? "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
+                        : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-violet-400"
+                    )}
                   >
-                    ↻
-                  </button>
-                  <button
-                    title="Highlight"
+                    <Repeat className="size-4 stroke-[2]" />
+                  </motion.button>
+
+                  {/* Deadline Button */}
+                  <motion.button
+                    type="button"
+                    title={task.deadlineAt ? "Clear Deadline" : "Add Deadline"}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                    onClick={() => {
+                      if (task.deadlineAt) {
+                        onUpdate(task._id, { deadlineAt: null });
+                      } else {
+                        onUpdate(task._id, {
+                          deadlineAt: deadlineDraftToIso({
+                            ...defaultDeadlineDraft(category.key),
+                            enabled: true,
+                          }),
+                        });
+                      }
+                    }}
+                    className={cn(
+                      "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
+                      task.deadlineAt
+                        ? "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
+                        : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-violet-400"
+                    )}
+                  >
+                    <Calendar className="size-4 stroke-[2]" />
+                  </motion.button>
+
+                  {/* Highlight Button */}
+                  <motion.button
+                    type="button"
+                    title={highlightTaskIds.includes(task._id) ? "Remove Highlight" : "Highlight Task"}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
                     onClick={() => onUpdate(task._id, { highlight: !highlightTaskIds.includes(task._id) })}
-                    className={cn("p-1 hover:text-zinc-950 dark:hover:text-zinc-50 transition", highlightTaskIds.includes(task._id) && "text-amber-500")}
+                    className={cn(
+                      "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500",
+                      highlightTaskIds.includes(task._id)
+                        ? "bg-amber-100/70 text-amber-500 dark:bg-amber-950/30 dark:text-amber-400"
+                        : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-amber-500 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-amber-400"
+                    )}
                   >
-                    <Star className="size-3.5" />
-                  </button>
-                  <button
-                    title="Delete"
+                    <Star className={cn("size-4 stroke-[2]", highlightTaskIds.includes(task._id) && "fill-amber-500 dark:fill-amber-400")} />
+                  </motion.button>
+
+                  {/* Delete Button */}
+                  <motion.button
+                    type="button"
+                    title="Delete Task"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.15, ease: "easeInOut" }}
                     onClick={() => onDelete(task._id)}
-                    className="p-1 hover:text-red-500 transition"
+                    className="size-8 rounded-full flex items-center justify-center transition-colors bg-transparent text-zinc-400 hover:bg-red-50 hover:text-red-650 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                    <Trash2 className="size-4 stroke-[2]" />
+                  </motion.button>
                 </>
               ) : (
                 <div ref={menuRef} className="relative inline-block text-left">
