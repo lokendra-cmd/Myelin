@@ -25,7 +25,7 @@ const SprintSchema = new Schema(
 export type SprintDocument = InferSchemaType<typeof SprintSchema>;
 
 if (mongoose.models.Sprint) {
-  delete (mongoose.models as any).Sprint;
+  delete (mongoose.models as Record<string, unknown>).Sprint;
 }
 
 export const Sprint: Model<SprintDocument> = mongoose.model("Sprint", SprintSchema);

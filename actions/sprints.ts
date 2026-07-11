@@ -215,6 +215,16 @@ export async function getWeeklyReview() {
   return Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
 }
 
+export async function deleteSprintAction(sprintId: string) {
+  await connectDB();
+  const deletedSprint = await Sprint.findByIdAndDelete(sprintId).lean();
+  if (!deletedSprint) throw new Error("Sprint not found");
+  await Task.deleteMany({ sprintId });
+  revalidatePath("/");
+  revalidatePath("/review");
+  return { success: true };
+}
+
 export async function getAnalytics(): Promise<AnalyticsData> {
   await connectDB();
   const categories = await getCategories();
@@ -308,25 +318,26 @@ export async function addTask(sprintId: string, input: unknown) {
 export async function updateTask(sprintId: string, taskId: string, input: unknown) {
   await connectDB();
   const data = taskUpdateSchema.parse(input);
-  const { highlight, ...updates } = data;
+  const { highlight, ...rawUpdates } = data;
+  const updates: Record<string, unknown> = { ...rawUpdates };
 
   if (updates.completed === true) {
     const current = await Task.findOne({ _id: taskId, sprintId }).lean();
     if (current && !current.completed) {
       const completedAtDate = new Date();
-      const startedAtDate = current.startedAt || new Date();
+      const startedAtDate = (current as unknown as { startedAt?: Date }).startedAt || new Date();
       
-      (updates as any).completedAt = completedAtDate;
-      (updates as any).startedAt = startedAtDate;
+      updates.completedAt = completedAtDate;
+      updates.startedAt = startedAtDate;
 
       const newSession = { startedAt: startedAtDate, completedAt: completedAtDate };
-      const currentHistory = (current as any).history || [];
-      (updates as any).history = [...currentHistory, newSession];
+      const currentHistory = (current as unknown as { history?: Array<{ startedAt: Date; completedAt: Date }> }).history || [];
+      updates.history = [...currentHistory, newSession];
     }
   } else if (updates.completed === false || updates.startedAt === null) {
-    (updates as any).completed = false;
-    (updates as any).completedAt = null;
-    (updates as any).startedAt = null;
+    updates.completed = false;
+    updates.completedAt = null;
+    updates.startedAt = null;
   }
 
   await Task.findOneAndUpdate({ _id: taskId, sprintId }, updates);

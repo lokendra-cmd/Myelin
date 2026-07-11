@@ -13,7 +13,7 @@ const RuleSchema = new Schema(
 export type RuleDocument = InferSchemaType<typeof RuleSchema>;
 
 if (mongoose.models.Rule) {
-  delete (mongoose.models as any).Rule;
+  delete (mongoose.models as Record<string, unknown>).Rule;
 }
 
 export const Rule: Model<RuleDocument> = mongoose.model("Rule", RuleSchema);

@@ -28,7 +28,7 @@ const TaskSchema = new Schema(
 export type TaskDocument = InferSchemaType<typeof TaskSchema>;
 
 if (mongoose.models.Task) {
-  delete (mongoose.models as any).Task;
+  delete (mongoose.models as Record<string, unknown>).Task;
 }
 
 export const Task: Model<TaskDocument> = mongoose.model("Task", TaskSchema);
