@@ -5,10 +5,11 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, FileDown, FileText, GripVertical, History, MoreVertical, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
+import { TaskModal } from "@/components/tasks/TaskModal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Confetti } from "@/components/confetti";
 import { ProgressRing } from "@/components/progress-ring";
@@ -68,6 +69,8 @@ export function SprintWorkspace({
   const [editingRule, setEditingRule] = useState<RuleDTO | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryDTO | null>(null);
   const [recurringTask, setRecurringTask] = useState<TaskDTO | null>(null);
+  const [editingTask, setEditingTask] = useState<TaskDTO | null>(null);
+  const [addTaskCategory, setAddTaskCategory] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -536,6 +539,35 @@ export function SprintWorkspace({
             }}
           />
 
+          {/* Edit Task Modal */}
+          {editingTask && (
+            <TaskModal
+              mode="edit"
+              open={!!editingTask}
+              onOpenChange={(open) => { if (!open) setEditingTask(null); }}
+              task={editingTask}
+              onSaved={(taskId, updates) => {
+                updateTask(taskId, updates);
+                setEditingTask(null);
+              }}
+            />
+          )}
+
+          {/* Add Task Modal (per-category) */}
+          {addTaskCategory && (
+            <TaskModal
+              mode="create"
+              open={!!addTaskCategory}
+              onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
+              category={addTaskCategory}
+              sprintId={sprint._id}
+              onCreated={(updatedSprint) => {
+                setSprint(updatedSprint);
+                setAddTaskCategory(null);
+              }}
+            />
+          )}
+
           <div className="space-y-6">
             {visibleCategories.map((category, index) => (
               <TaskSection
@@ -549,11 +581,13 @@ export function SprintWorkspace({
                 onDraft={(value) => setDraft((current) => ({ ...current, [category.key]: value }))}
                 onDeadlineDraft={(value) => setDeadlineDraft((current) => ({ ...current, [category.key]: value }))}
                 onAdd={() => add(category.key)}
+                onAddTask={() => setAddTaskCategory(category.key)}
                 onRename={(label) => renameCategory(category.key, label)}
                 onEditCategory={() => setEditingCategory(category)}
                 onDeleteCategory={() => deleteCategory(category.key)}
                 onUpdate={updateTask}
                 onDelete={remove}
+                onEdit={setEditingTask}
                 onDrag={setDragging}
                 onDrop={onDrop}
                 highlightTaskIds={sprint.highlightTaskIds}
@@ -622,6 +656,7 @@ function TaskItem({
   highlightTaskIds,
   onUpdate,
   onDelete,
+  onEdit,
   onDrag,
   onDrop,
   debouncedTaskTitle,
@@ -633,6 +668,7 @@ function TaskItem({
   highlightTaskIds: string[];
   onUpdate: (taskId: string, updates: Partial<TaskDTO> & { highlight?: boolean }) => void;
   onDelete: (taskId: string) => void;
+  onEdit: (task: TaskDTO) => void;
   onDrag: (taskId: string | null) => void;
   onDrop: (category: Category, targetId?: string) => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
@@ -645,8 +681,10 @@ function TaskItem({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"none" | "start-again" | "delete">("none");
   const menuRef = useRef<HTMLDivElement>(null);
+  const deleteMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -659,6 +697,17 @@ function TaskItem({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!deleteMenuOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (deleteMenuRef.current && !deleteMenuRef.current.contains(event.target as Node)) {
+        setDeleteMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [deleteMenuOpen]);
 
   let statusIcon;
   if (isCompleted) {
@@ -806,77 +855,81 @@ function TaskItem({
             <div className="flex items-center gap-2 text-zinc-400 dark:text-zinc-650 relative">
               {!isCompleted ? (
                 <>
-                  {/* Recurring Button */}
-                  <motion.button
-                    type="button"
-                    title="Recurring"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                  {/* Recurring */}
+                  <TaskActionIcon
+                    icon={Repeat}
+                    tooltip={task.isRecurring ? "Edit Recurrence" : "Set Recurring"}
+                    active={task.isRecurring}
+                    activeColor="violet"
                     onClick={() => onConfigureRecurring(task)}
-                    className={cn(
-                      "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
-                      task.isRecurring
-                        ? "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
-                        : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-violet-400"
-                    )}
-                  >
-                    <Repeat className="size-4 stroke-[2]" />
-                  </motion.button>
+                  />
 
-                  {/* Deadline Button */}
+                  {/* Deadline */}
                   <DeadlinePickerBox
                     value={task.deadlineAt ? dateTimeInputValue(task.deadlineAt) : ""}
                     onChange={(value) => onUpdate(task._id, { deadlineAt: dateTimeInputToIso(value) })}
                     customTrigger={
-                      <motion.button
-                        type="button"
-                        title={task.deadlineAt ? "Change Deadline" : "Add Deadline"}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.97 }}
-                        transition={{ duration: 0.15, ease: "easeInOut" }}
-                        className={cn(
-                          "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
-                          task.deadlineAt
-                            ? "bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
-                            : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-violet-600 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-violet-400"
-                        )}
-                      >
-                        <Calendar className="size-4 stroke-[2]" />
-                      </motion.button>
+                      <TaskActionIcon
+                        icon={Calendar}
+                        tooltip={task.deadlineAt ? "Change Deadline" : "Add Deadline"}
+                        active={!!task.deadlineAt}
+                        activeColor="violet"
+                      />
                     }
                   />
 
-                  {/* Highlight Button */}
-                  <motion.button
-                    type="button"
-                    title={highlightTaskIds.includes(task._id) ? "Remove Highlight" : "Highlight Task"}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.15, ease: "easeInOut" }}
+                  {/* Highlight */}
+                  <TaskActionIcon
+                    icon={Star}
+                    tooltip={highlightTaskIds.includes(task._id) ? "Remove Highlight" : "Highlight Task"}
+                    active={highlightTaskIds.includes(task._id)}
+                    activeColor="amber"
                     onClick={() => onUpdate(task._id, { highlight: !highlightTaskIds.includes(task._id) })}
-                    className={cn(
-                      "size-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500",
-                      highlightTaskIds.includes(task._id)
-                        ? "bg-amber-100/70 text-amber-500 dark:bg-amber-950/30 dark:text-amber-400"
-                        : "bg-transparent text-zinc-400 hover:bg-zinc-100 hover:text-amber-500 dark:text-zinc-500 dark:hover:bg-zinc-900/60 dark:hover:text-amber-400"
-                    )}
-                  >
-                    <Star className={cn("size-4 stroke-[2]", highlightTaskIds.includes(task._id) && "fill-amber-500 dark:fill-amber-400")} />
-                  </motion.button>
+                  />
 
-                  {/* Delete Button */}
-                  <motion.button
-                    type="button"
-                    title="Delete Task"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.15, ease: "easeInOut" }}
-                    onClick={() => onDelete(task._id)}
-                    className="size-8 rounded-full flex items-center justify-center transition-colors bg-transparent text-zinc-400 hover:bg-red-50 hover:text-red-650 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  >
-                    <Trash2 className="size-4 stroke-[2]" />
-                  </motion.button>
+                  {/* Edit */}
+                  <TaskActionIcon
+                    icon={Pencil}
+                    tooltip="Edit Task"
+                    activeColor="violet"
+                    onClick={() => onEdit(task)}
+                  />
+
+                  {/* Delete with inline confirmation */}
+                  <div ref={deleteMenuRef} className="relative">
+                    <TaskActionIcon
+                      icon={Trash2}
+                      tooltip="Delete Task"
+                      activeColor="red"
+                      hoverColor="red"
+                      active={deleteMenuOpen}
+                      onClick={() => setDeleteMenuOpen((v) => !v)}
+                    />
+                    {deleteMenuOpen && (
+                      <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-zinc-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 z-20 overflow-hidden p-3 space-y-3 animate-in fade-in-0 zoom-in-95 duration-100">
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Delete this task?</p>
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">This action cannot be undone.</p>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDeleteMenuOpen(false)}
+                            className="px-2.5 py-1.5 rounded-md text-[11px] font-medium text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50 dark:hover:text-zinc-300 dark:hover:bg-zinc-900 transition"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setDeleteMenuOpen(false); onDelete(task._id); }}
+                            className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold bg-red-600 hover:bg-red-700 text-white transition shadow-sm"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div ref={menuRef} className="relative inline-block text-left">
@@ -1042,11 +1095,13 @@ function TaskSection(props: {
   onDraft: (value: string) => void;
   onDeadlineDraft: (value: DeadlineDraft) => void;
   onAdd: () => void;
+  onAddTask: () => void;
   onRename: (label: string) => void;
   onEditCategory: () => void;
   onDeleteCategory: () => void;
   onUpdate: (taskId: string, updates: Partial<TaskDTO> & { highlight?: boolean }) => void;
   onDelete: (taskId: string) => void;
+  onEdit: (task: TaskDTO) => void;
   onDrag: (taskId: string | null) => void;
   onDrop: (category: Category, targetId?: string) => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
@@ -1163,6 +1218,7 @@ function TaskSection(props: {
                     highlightTaskIds={props.highlightTaskIds}
                     onUpdate={props.onUpdate}
                     onDelete={props.onDelete}
+                    onEdit={props.onEdit}
                     onDrag={props.onDrag}
                     onDrop={props.onDrop}
                     debouncedTaskTitle={props.debouncedTaskTitle}
@@ -1171,39 +1227,16 @@ function TaskSection(props: {
                   />
                 ))}
               </div>
-              <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                <div className="flex items-center gap-2">
-                  <Input
-                    ref={props.firstInput}
-                    value={props.draft}
-                    placeholder="+ Add Task"
-                    onChange={(event) => props.onDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") props.onAdd();
-                    }}
-                  />
-                  <Button variant="subtle" size="icon" onClick={props.onAdd} disabled={props.pending}>
-                    <Plus className="size-4" />
-                  </Button>
-                </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <label className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-                    <input
-                      type="checkbox"
-                      checked={props.deadlineDraft.enabled}
-                      onChange={(event) => props.onDeadlineDraft({ ...props.deadlineDraft, enabled: event.target.checked })}
-                      className="size-4 rounded border-zinc-300"
-                    />
-                    Assign deadline
-                  </label>
-                  <DeadlinePickerBox
-                    value={props.deadlineDraft.value}
-                    disabled={!props.deadlineDraft.enabled}
-                    onChange={(value) => props.onDeadlineDraft({ ...props.deadlineDraft, value })}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
+              <motion.button
+                type="button"
+                onClick={props.onAddTask}
+                whileHover={{ scale: 1.005 }}
+                whileTap={{ scale: 0.995 }}
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:border-violet-400 hover:text-violet-600 dark:hover:border-violet-600 dark:hover:text-violet-400 transition-colors"
+              >
+                <Plus className="size-4" />
+                Add Task
+              </motion.button>
             </div>
           </motion.div>
         )}
