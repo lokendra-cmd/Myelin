@@ -771,14 +771,10 @@ function TaskItem({
                   Deadline: {formatFullDateTime(task.deadlineAt)}
                 </span>
               ) : (
-                <button
-                  title="Add deadline"
-                  onClick={() => onUpdate(task._id, { deadlineAt: deadlineDraftToIso({ ...defaultDeadlineDraft(category.key), enabled: true }) })}
-                  className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 border border-dashed border-zinc-200 dark:border-zinc-800 rounded px-2 py-0.5"
-                >
+                <span className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded px-2 py-0.5 select-none">
                   <CalendarClock className="size-3" />
                   Add deadline
-                </button>
+                </span>
               )}
             </div>
             {isInProgress && (
