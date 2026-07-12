@@ -23,7 +23,15 @@ import { cn } from "@/lib/utils";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { useShortcuts } from "@/hooks/use-shortcuts";
 import type { Category, CategoryDTO, SprintDTO, TaskDTO, RuleDTO } from "@/types/sprint";
-import { prettyDate } from "@/utils/date";
+import {
+  prettyDate,
+  isoDate,
+  formatDateTime,
+  formatSprintDate,
+  formatToLocalInputValue,
+  parseLocalInputValueToUTC,
+  getUTCTimestamp
+} from "@/utils/date";
 import { productivityMood } from "@/utils/productivity";
 
 type DeadlineDraft = {
@@ -53,11 +61,13 @@ export function SprintWorkspace({
   initialCategories,
   initialRules = [],
   quickAdd,
+  timeZone,
 }: {
   initialSprint: SprintDTO;
   initialCategories: CategoryDTO[];
   initialRules?: RuleDTO[];
   quickAdd?: boolean;
+  timeZone: string;
 }) {
   const [sprint, setSprint] = useState(initialSprint);
   const [categories, setCategories] = useState(initialCategories);
@@ -122,9 +132,9 @@ export function SprintWorkspace({
   function add(category: Category) {
     const title = draft[category]?.trim();
     if (!title) return;
-    const deadlineAt = deadlineDraftToIso(deadlineDraft[category] ?? defaultDeadlineDraft(category));
+    const deadlineAt = deadlineDraftToIso(deadlineDraft[category] ?? defaultDeadlineDraft(category, timeZone), timeZone);
     setDraft((current) => ({ ...current, [category]: "" }));
-    setDeadlineDraft((current) => ({ ...current, [category]: defaultDeadlineDraft(category) }));
+    setDeadlineDraft((current) => ({ ...current, [category]: defaultDeadlineDraft(category, timeZone) }));
     startTransition(() => {
       void mutate(`/api/sprints/${sprint._id}`, {
         method: "POST",
@@ -284,8 +294,8 @@ export function SprintWorkspace({
     });
   }
 
-  const displayTitle = sprint.title.startsWith("Sprint ")
-    ? `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${sprint.date}T00:00:00`))}`
+  const displayTitle = sprint.title.startsWith("Sprint ") || sprint.title.startsWith("Myelination ")
+    ? `Myelination ${formatSprintDate(sprint.date)}`
     : sprint.title;
 
   return (
@@ -293,7 +303,7 @@ export function SprintWorkspace({
       <Confetti active={sprint.productivity === 100 && sprint.totalTasks > 0} />
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm text-zinc-500">{prettyDate(sprint.date)}</p>
+          <p className="text-sm text-zinc-500">{prettyDate(sprint.date, "long", timeZone)}</p>
           <input
             value={displayTitle}
             onChange={(event) => {
@@ -304,8 +314,8 @@ export function SprintWorkspace({
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="subtle" size="sm"><Link href={`/api/sprints/${sprint._id}/markdown`}><ArrowDownToLine className="size-4" />Markdown</Link></Button>
-          <Button asChild variant="subtle" size="sm"><Link href={`/api/sprints/${sprint._id}/pdf`}><FileDown className="size-4" />PDF</Link></Button>
+          <Button asChild variant="subtle" size="sm"><Link href={`/api/sprints/${sprint._id}/markdown?tz=${encodeURIComponent(timeZone)}`}><ArrowDownToLine className="size-4" />Markdown</Link></Button>
+          <Button asChild variant="subtle" size="sm"><Link href={`/api/sprints/${sprint._id}/pdf?tz=${encodeURIComponent(timeZone)}`}><FileDown className="size-4" />PDF</Link></Button>
         </div>
       </div>
 
@@ -589,7 +599,7 @@ export function SprintWorkspace({
                 tasks={tasksByCategory[category.key] ?? []}
                 firstInput={index === 0 ? firstInput : undefined}
                 draft={draft[category.key] ?? ""}
-                deadlineDraft={deadlineDraft[category.key] ?? defaultDeadlineDraft(category.key)}
+                deadlineDraft={deadlineDraft[category.key] ?? defaultDeadlineDraft(category.key, timeZone)}
                 dragging={dragging}
                 onDraft={(value) => setDraft((current) => ({ ...current, [category.key]: value }))}
                 onDeadlineDraft={(value) => setDeadlineDraft((current) => ({ ...current, [category.key]: value }))}
@@ -609,6 +619,7 @@ export function SprintWorkspace({
                 onActiveMenuIdChange={setActiveMenuId}
                 debouncedTaskTitle={debouncedTaskTitle}
                 onConfigureRecurring={setRecurringTask}
+                timeZone={timeZone}
               />
             ))}
           </div>
@@ -675,6 +686,7 @@ function TaskItem({
   debouncedTaskTitle,
   dragging,
   onConfigureRecurring,
+  timeZone,
 }: {
   task: TaskDTO;
   category: CategoryDTO;
@@ -687,6 +699,7 @@ function TaskItem({
   debouncedTaskTitle: (taskId: string, title: string) => void;
   dragging: string | null;
   onConfigureRecurring: (task: TaskDTO) => void;
+  timeZone: string;
 }) {
   const isCompleted = task.completed;
   const isInProgress = !task.completed && !!task.startedAt;
@@ -760,7 +773,7 @@ function TaskItem({
       <Button
         variant="default"
         size="sm"
-        onClick={() => onUpdate(task._id, { startedAt: new Date().toISOString() })}
+        onClick={() => onUpdate(task._id, { startedAt: getUTCTimestamp() })}
         className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-3 py-1.5 h-auto text-xs shrink-0 flex items-center gap-1.5 shadow-sm"
       >
         <Play className="size-3 fill-current" /> Start Task
@@ -825,12 +838,12 @@ function TaskItem({
               {isCompleted ? (
                 <span className="flex items-center gap-1 text-[11px] text-zinc-400 dark:text-zinc-500">
                   <Check className="size-3 text-emerald-600 dark:text-emerald-500" />
-                  Completed at {new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(task.completedAt || task.updatedAt))}
+                  Completed at {formatDateTime(task.completedAt || task.updatedAt, "time", timeZone)}
                 </span>
               ) : task.deadlineAt ? (
                 <span className="flex items-center gap-1.5">
                   <Calendar className="size-3.5" />
-                  Deadline: {formatFullDateTime(task.deadlineAt)}
+                  Deadline: {formatDateTime(task.deadlineAt, "full", timeZone)}
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded px-2 py-0.5 select-none">
@@ -879,8 +892,9 @@ function TaskItem({
 
                   {/* Deadline */}
                   <DeadlinePickerBox
-                    value={task.deadlineAt ? dateTimeInputValue(task.deadlineAt) : ""}
-                    onChange={(value) => onUpdate(task._id, { deadlineAt: dateTimeInputToIso(value) })}
+                    value={task.deadlineAt ? formatToLocalInputValue(task.deadlineAt, timeZone) : ""}
+                    onChange={(value) => onUpdate(task._id, { deadlineAt: parseLocalInputValueToUTC(value, timeZone) })}
+                    timeZone={timeZone}
                     customTrigger={
                       <TaskActionIcon
                         icon={Calendar}
@@ -1062,11 +1076,11 @@ function TaskItem({
                     <div className="grid grid-cols-2 gap-2 text-zinc-600 dark:text-zinc-400 mb-2">
                       <div>
                         <span className="font-medium block text-zinc-400 dark:text-zinc-500 mb-0.5">Started At</span>
-                        {formatFullDateTime(session.startedAt)}
+                        {formatDateTime(session.startedAt, "full", timeZone)}
                       </div>
                       <div>
                         <span className="font-medium block text-zinc-400 dark:text-zinc-500 mb-0.5">Completed At</span>
-                        {formatFullDateTime(session.completedAt)}
+                        {formatDateTime(session.completedAt, "full", timeZone)}
                       </div>
                     </div>
                     <div className="pt-2 border-t border-zinc-200/40 dark:border-zinc-800/40 flex justify-between items-center text-zinc-800 dark:text-zinc-200 font-medium">
@@ -1119,6 +1133,7 @@ function TaskSection(props: {
   onDrop: (category: Category, targetId?: string) => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
   onConfigureRecurring: (task: TaskDTO) => void;
+  timeZone: string;
 }) {
   // Resolve theme — prefer stored themeId, fall back to deterministic hash
   const theme = props.category.themeId
@@ -1237,6 +1252,7 @@ function TaskSection(props: {
                     debouncedTaskTitle={props.debouncedTaskTitle}
                     dragging={props.dragging}
                     onConfigureRecurring={props.onConfigureRecurring}
+                    timeZone={props.timeZone}
                   />
                 ))}
               </div>
@@ -1267,16 +1283,18 @@ function DeadlinePickerBox({
   onChange,
   className,
   customTrigger,
+  timeZone,
 }: {
   value: string;
   disabled?: boolean;
   onChange: (value: string) => void;
   className?: string;
   customTrigger?: React.ReactNode;
+  timeZone: string;
 }) {
   const [open, setOpen] = useState(false);
-  const safeValue = value || `${todayInputValue()}T23:59`;
-  const selected = parseDateTimeInput(safeValue);
+  const safeValue = value || `${todayInputValue(timeZone)}T23:59`;
+  const selected = parseDateTimeInput(safeValue, timeZone);
   const [viewDate, setViewDate] = useState(() => new Date(selected.year, selected.month, 1));
   const calendarDays = useMemo(() => getCalendarDays(viewDate), [viewDate]);
 
@@ -1298,7 +1316,7 @@ function DeadlinePickerBox({
           className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 text-left text-xs text-zinc-700 outline-none transition hover:border-zinc-300 disabled:cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:border-zinc-700"
         >
           <CalendarClock className="size-4 shrink-0 text-zinc-400" />
-          <span className="min-w-0 flex-1 truncate">{formatDateTimeInput(safeValue)}</span>
+          <span className="min-w-0 flex-1 truncate">{formatDateTime(safeValue, "short", timeZone)}</span>
         </button>
       )}
       {open && !disabled && typeof document !== "undefined" &&
@@ -1315,7 +1333,7 @@ function DeadlinePickerBox({
                 ‹
               </button>
               <div className="text-sm font-semibold">
-                {new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(viewDate)}
+                 {formatDateTime(viewDate, "monthYear", timeZone)}
               </div>
               <button
                 type="button"
@@ -1410,33 +1428,20 @@ function DeadlinePickerBox({
 }
 
 
-function defaultDeadlineDraft(category: Category): DeadlineDraft {
+function defaultDeadlineDraft(category: Category, timeZone: string): DeadlineDraft {
   return {
     enabled: category === "URGENT",
-    value: `${todayInputValue()}T23:59`,
+    value: `${todayInputValue(timeZone)}T23:59`,
   };
 }
 
-function deadlineDraftToIso(draft: DeadlineDraft) {
+function deadlineDraftToIso(draft: DeadlineDraft, timeZone: string) {
   if (!draft.enabled) return null;
-  return dateTimeInputToIso(draft.value);
+  return parseLocalInputValueToUTC(draft.value, timeZone);
 }
 
-function dateTimeInputToIso(value: string) {
-  if (!value) return null;
-  return new Date(value).toISOString();
-}
-
-function dateTimeInputValue(value: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
-
-function parseDateTimeInput(value: string): ParsedDateTime {
-  const fallback = `${todayInputValue()}T23:59`;
+function parseDateTimeInput(value: string, timeZone: string): ParsedDateTime {
+  const fallback = `${todayInputValue(timeZone)}T23:59`;
   const [datePart, timePart = "23:59"] = (value || fallback).split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   return {
@@ -1468,15 +1473,6 @@ function getCalendarDays(viewDate: Date) {
   });
 }
 
-function formatDateTimeInput(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function formatTimeLabel(value: string) {
   const [hourValue, minute] = value.split(":").map(Number);
   const hour = hourValue % 12 || 12;
@@ -1484,20 +1480,8 @@ function formatTimeLabel(value: string) {
   return `${hour}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
-function todayInputValue() {
-  const date = new Date();
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function formatFullDateTime(value: string | Date | null | undefined) {
-  if (!value) return "";
-  const date = typeof value === "string" ? new Date(value) : value;
-  const day = date.getDate();
-  const month = new Intl.DateTimeFormat("en", { month: "long" }).format(date);
-  const year = date.getFullYear();
-  const time = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit", hour12: true }).format(date);
-  return `${day} ${month} ${year}, ${time}`;
+function todayInputValue(timeZone: string) {
+  return isoDate(undefined, timeZone);
 }
 
 function TaskCountdown({ deadlineAt }: { deadlineAt: string }) {

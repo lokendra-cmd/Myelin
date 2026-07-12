@@ -5,15 +5,15 @@ import { Card } from "@/components/ui/card";
 import { NewSprintButton } from "@/components/new-sprint-button";
 import { ProgressRing } from "@/components/progress-ring";
 import type { DashboardData } from "@/types/sprint";
-import { prettyDate, greeting } from "@/utils/date";
+import { prettyDate, greeting, formatSprintDate } from "@/utils/date";
 import { productivityMood } from "@/utils/productivity";
 
-export function Dashboard({ data }: { data: DashboardData }) {
+export function Dashboard({ data, timeZone }: { data: DashboardData; timeZone: string }) {
   const today = data.today;
   const highlightTasks = today?.tasks.filter((task) => today.highlightTaskIds.includes(task._id)) ?? [];
 
-  const todayTitle = today?.title.startsWith("Sprint ")
-    ? `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${today.date}T00:00:00`))}`
+  const todayTitle = today?.title.startsWith("Sprint ") || today?.title.startsWith("Myelination ")
+    ? `Myelination ${formatSprintDate(today.date)}`
     : today?.title;
 
   return (
@@ -21,8 +21,8 @@ export function Dashboard({ data }: { data: DashboardData }) {
       <section className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm text-zinc-500">{prettyDate(new Date())}</p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-normal">{greeting()}, Lokendra</h1>
+            <p className="text-sm text-zinc-500">{prettyDate(new Date(), "long", timeZone)}</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-normal">{greeting(timeZone)}, Lokendra</h1>
           </div>
           <NewSprintButton />
         </div>
@@ -69,7 +69,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
                 <Link key={sprint._id} href={`/sprints/${sprint._id}`}>
                   <Card className="p-4 transition hover:-translate-y-0.5 hover:shadow-md">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-zinc-500">{prettyDate(sprint.date, "short")}</span>
+                      <span className="text-sm text-zinc-500">{prettyDate(sprint.date, "short", timeZone)}</span>
                       <span>{mood.emoji}</span>
                     </div>
                     <div className="mt-5 text-3xl font-semibold">{sprint.productivity}%</div>

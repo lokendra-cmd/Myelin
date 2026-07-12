@@ -2,8 +2,10 @@ import { getSprint } from "@/actions/sprints";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, { params }: Ctx) {
+export async function GET(request: Request, { params }: Ctx) {
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const tz = searchParams.get("tz") || "UTC";
   const sprint = await getSprint(id);
   if (!sprint) return new Response("Not found", { status: 404 });
   const lines = [
@@ -14,7 +16,7 @@ export async function GET(_: Request, { params }: Ctx) {
     "",
     "## Tasks",
     ...sprint.tasks.map((task) => {
-      const meta = [task.category, task.isRecurring ? "recurring" : "", task.deadlineAt ? `due ${formatDeadline(task.deadlineAt)}` : ""].filter(Boolean).join(", ");
+      const meta = [task.category, task.isRecurring ? "recurring" : "", task.deadlineAt ? `due ${formatDeadline(task.deadlineAt, tz)}` : ""].filter(Boolean).join(", ");
       return `- [${task.completed ? "x" : " "}] ${task.title} (${meta})`;
     }),
     "",
@@ -31,11 +33,12 @@ export async function GET(_: Request, { params }: Ctx) {
   });
 }
 
-function formatDeadline(value: string) {
-  return new Intl.DateTimeFormat("en", {
+function formatDeadline(value: string, timeZone: string) {
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
   }).format(new Date(value));
 }

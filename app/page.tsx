@@ -1,13 +1,15 @@
 import { Dashboard } from "@/components/dashboard";
 import { getDashboardData } from "@/actions/sprints";
 import { Card } from "@/components/ui/card";
+import { getServerTimeZone } from "@/utils/dateServer";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   try {
     const data = await getDashboardData();
-    return <Dashboard data={data} />;
+    const tz = await getServerTimeZone();
+    return <Dashboard data={data} timeZone={tz} />;
   } catch (error) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-20">

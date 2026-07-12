@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, CalendarDays, Command, Home, Brain } from "lucide-react";
@@ -20,6 +21,20 @@ const nav = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const setCommandOpen = useUIStore((state) => state.setCommandOpen);
+
+  useEffect(() => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return decodeURIComponent(parts.pop()!.split(";").shift()!);
+      return null;
+    };
+    if (getCookie("timezone") !== tz) {
+      document.cookie = `timezone=${encodeURIComponent(tz)}; path=/; max-age=31536000; SameSite=Lax`;
+      window.location.reload();
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-zinc-950 dark:bg-[#090909] dark:text-zinc-50">

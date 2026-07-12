@@ -12,9 +12,10 @@ import type { SprintDTO } from "@/types/sprint";
 
 interface ReviewListProps {
   initialSprints: SprintDTO[];
+  timeZone: string;
 }
 
-export function ReviewList({ initialSprints }: ReviewListProps) {
+export function ReviewList({ initialSprints, timeZone }: ReviewListProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [sprints, setSprints] = useState<SprintDTO[]>(initialSprints);
@@ -66,7 +67,7 @@ export function ReviewList({ initialSprints }: ReviewListProps) {
                 className="grid grid-cols-[1.2fr_.7fr_.7fr_.8fr_1.5fr_.4fr_60px] px-4 py-3 text-sm transition hover:bg-zinc-55/60 dark:hover:bg-zinc-900/50 cursor-pointer items-center group"
               >
                 <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                  {prettyDate(sprint.date, "short")}
+                  {prettyDate(sprint.date, "short", timeZone)}
                 </span>
                 <span className="text-zinc-650 dark:text-zinc-350">{sprint.completedTasks}</span>
                 <span className="text-zinc-650 dark:text-zinc-350">{sprint.totalTasks}</span>

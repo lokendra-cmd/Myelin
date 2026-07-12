@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { getCategories, getSprint, getRules } from "@/actions/sprints";
 import { SprintWorkspace } from "@/components/sprint-workspace";
+import { getServerTimeZone } from "@/utils/dateServer";
 
 export const dynamic = "force-dynamic";
 
 export default async function SprintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ new?: string }> }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const [sprint, categories, rules] = await Promise.all([getSprint(id), getCategories(), getRules()]);
+  const [sprint, categories, rules, tz] = await Promise.all([getSprint(id), getCategories(), getRules(), getServerTimeZone()]);
   if (!sprint) notFound();
-  return <SprintWorkspace initialSprint={sprint} initialCategories={categories} initialRules={rules} quickAdd={query.new === "1"} />;
+  return <SprintWorkspace initialSprint={sprint} initialCategories={categories} initialRules={rules} quickAdd={query.new === "1"} timeZone={tz} />;
 }

@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { CalendarDays, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isoDate } from "@/utils/date";
 
 type NewSprintButtonProps = {
   label?: string;
@@ -15,7 +16,7 @@ type NewSprintButtonProps = {
 export function NewSprintButton({ label = "New Myelination", size = "md" }: NewSprintButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(todayInputValue());
+  const [date, setDate] = useState(() => isoDate());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -85,10 +86,4 @@ export function NewSprintButton({ label = "New Myelination", size = "md" }: NewS
       </Dialog.Portal>
     </Dialog.Root>
   );
-}
-
-function todayInputValue() {
-  const date = new Date();
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }

@@ -12,7 +12,8 @@ import { Sprint } from "@/models/Sprint";
 import { Task } from "@/models/Task";
 import { BrainDumpThought } from "@/models/BrainDumpThought";
 import type { AnalyticsData, Category, CategoryDTO, SprintDTO, RuleDTO, BrainDumpThoughtDTO } from "@/types/sprint";
-import { isoDate } from "@/utils/date";
+import { isoDate, formatSprintDate } from "@/utils/date";
+import { getServerTimeZone } from "@/utils/dateServer";
 import { calculateProductivity } from "@/utils/productivity";
 
 async function recalculateSprint(sprintId: string) {
@@ -167,14 +168,16 @@ export async function deleteCategory(key: string, sprintId?: string) {
   return sprintId ? sprintWithTasks(sprintId) : null;
 }
 
-export async function createSprint(date = isoDate()) {
+export async function createSprint(date?: string) {
   await connectDB();
-  const existing = await Sprint.findOne({ date }).lean();
+  const tz = await getServerTimeZone();
+  const targetDate = date || isoDate(undefined, tz);
+  const existing = await Sprint.findOne({ date: targetDate }).lean();
   if (existing) return serializeSprint(existing, await Task.find({ sprintId: existing._id }).lean());
 
-  const title = `Myelination ${new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(`${date}T00:00:00`))}`;
-  const sprint = await Sprint.create({ date, title, highlightTaskIds: [] });
-  const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
+  const title = `Myelination ${formatSprintDate(targetDate)}`;
+  const sprint = await Sprint.create({ date: targetDate, title, highlightTaskIds: [] });
+  const dayOfWeek = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
 
   // Fetch ALL recurring tasks but deduplicate by (title, category) so that copies-of-copies
   // from previous sprints don't compound. We keep the first occurrence of each unique task.
@@ -217,12 +220,14 @@ export async function createSprint(date = isoDate()) {
 
 export async function getDashboardData() {
   await connectDB();
+  const tz = await getServerTimeZone();
+  const todayDate = isoDate(undefined, tz);
   const recentDocs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: -1 }).limit(7).lean();
   const recent = await Promise.all(
     recentDocs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())),
   );
-  const today = recent.find((sprint) => sprint.date === isoDate()) ?? (await getSprintByDate(isoDate()));
-  return { today, recent, currentStreak: getStreak(recent) };
+  const today = recent.find((sprint) => sprint.date === todayDate) ?? (await getSprintByDate(todayDate));
+  return { today, recent, currentStreak: getStreak(recent, tz) };
 }
 
 export async function getWeeklyReview() {
@@ -243,6 +248,7 @@ export async function deleteSprintAction(sprintId: string) {
 
 export async function getAnalytics(): Promise<AnalyticsData> {
   await connectDB();
+  const tz = await getServerTimeZone();
   const categories = await getCategories();
   const docs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: 1 }).limit(31).lean();
   const sprints = await Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
@@ -271,7 +277,7 @@ export async function getAnalytics(): Promise<AnalyticsData> {
       ...values,
     })),
     averageProductivity,
-    longestStreak: getStreak(sprints),
+    longestStreak: getStreak(sprints, tz),
     bestDay: completedDays.toSorted((a, b) => b.productivity - a.productivity)[0] ?? null,
     worstDay: completedDays.toSorted((a, b) => a.productivity - b.productivity)[0] ?? null,
   };
@@ -410,13 +416,16 @@ export async function searchSprints(query: string) {
   return Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
 }
 
-function getStreak(sprints: SprintDTO[]) {
+function getStreak(sprints: SprintDTO[], timeZone: string) {
   const productive = new Set(sprints.filter((sprint) => sprint.productivity >= 70).map((sprint) => sprint.date));
   let streak = 0;
-  const cursor = new Date(`${isoDate()}T00:00:00`);
-  while (productive.has(isoDate(cursor))) {
+  const todayStr = isoDate(undefined, timeZone);
+  const cursor = new Date(`${todayStr}T00:00:00Z`);
+  while (true) {
+    const dateStr = cursor.toISOString().slice(0, 10);
+    if (!productive.has(dateStr)) break;
     streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
   return streak;
 }
@@ -442,7 +451,8 @@ export async function getBrainDumpSprint(): Promise<SprintDTO> {
 
 export async function moveTaskToToday(taskId: string, targetCategory: string) {
   await connectDB();
-  const todaySprint = await createSprint(isoDate());
+  const tz = await getServerTimeZone();
+  const todaySprint = await createSprint(isoDate(undefined, tz));
   if (!todaySprint) throw new Error("Could not find or create today's sprint");
 
   const task = await Task.findById(taskId);
@@ -503,7 +513,8 @@ export async function convertThoughtToTask(thoughtId: string, targetCategory: st
   const thought = await BrainDumpThought.findById(thoughtId);
   if (!thought) throw new Error("Thought not found");
 
-  const todaySprint = await createSprint(isoDate());
+  const tz = await getServerTimeZone();
+  const todaySprint = await createSprint(isoDate(undefined, tz));
   if (!todaySprint) throw new Error("Could not find or create today's sprint");
 
   const maxOrderTask = await Task.findOne({ sprintId: todaySprint._id, category: targetCategory })
