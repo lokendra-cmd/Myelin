@@ -8,12 +8,16 @@ import { RecurringPresetCard } from "./RecurringPresetCard";
 import { RecurringWeekdaySelector } from "./RecurringWeekdaySelector";
 import { getPresetFromDays, getDaysFromPreset, RecurringPreset } from "@/lib/recurringUtils";
 import type { TaskDTO } from "@/types/sprint";
+import { Input } from "@/components/ui/input";
+import { isoDate, parseLocalInputValueToUTC } from "@/utils/date";
+import { cn } from "@/lib/utils";
 
 interface RecurringDialogProps {
   task: TaskDTO | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (days: number[]) => void;
+  onSave: (days: number[], startDate: string | null, endDate: string | null, untilComplete: boolean) => void;
+  timeZone: string;
 }
 
 export function RecurringDialog({
@@ -21,9 +25,15 @@ export function RecurringDialog({
   open,
   onOpenChange,
   onSave,
+  timeZone,
 }: RecurringDialogProps) {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [preset, setPreset] = useState<RecurringPreset>("custom");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [untilComplete, setUntilComplete] = useState<boolean>(false);
+
+  const todayStr = isoDate(undefined, timeZone);
 
   // Load task's existing recurring configuration on open
   useEffect(() => {
@@ -31,11 +41,17 @@ export function RecurringDialog({
       const days = task.recurringDays || [];
       setSelectedDays(days);
       setPreset(getPresetFromDays(days));
+      setStartDate(task.recurringStartDate ? isoDate(task.recurringStartDate, timeZone) : todayStr);
+      setEndDate(task.recurringEndDate ? isoDate(task.recurringEndDate, timeZone) : "");
+      setUntilComplete(task.untilComplete ?? false);
     } else {
       setSelectedDays([]);
       setPreset("custom");
+      setStartDate("");
+      setEndDate("");
+      setUntilComplete(false);
     }
-  }, [open, task]);
+  }, [open, task, timeZone, todayStr]);
 
   function handlePresetChange(nextPreset: RecurringPreset) {
     if (nextPreset === preset) {
@@ -45,12 +61,22 @@ export function RecurringDialog({
     } else {
       setPreset(nextPreset);
       setSelectedDays(getDaysFromPreset(nextPreset));
+      setUntilComplete(false);
     }
   }
 
   function handleDaysChange(nextDays: number[]) {
     setSelectedDays(nextDays);
     setPreset(getPresetFromDays(nextDays));
+    if (nextDays.length > 0) {
+      setUntilComplete(false);
+    }
+  }
+
+  function handleSave() {
+    const utcStart = startDate ? parseLocalInputValueToUTC(startDate, timeZone) : null;
+    const utcEnd = endDate ? parseLocalInputValueToUTC(endDate, timeZone) : null;
+    onSave(selectedDays, utcStart, utcEnd, untilComplete);
   }
 
   return (
@@ -90,10 +116,10 @@ export function RecurringDialog({
                       {/* Labels */}
                       <div className="flex flex-col">
                         <Dialog.Title className="text-xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
-                          Make task recursive
+                          Task Repeat & Continuity
                         </Dialog.Title>
                         <Dialog.Description className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-                          Choose how often this task should repeat.
+                          Configure how this task repeats or carries forward.
                         </Dialog.Description>
                       </div>
                     </div>
@@ -112,46 +138,115 @@ export function RecurringDialog({
 
                   {/* Body Content */}
                   <div className="mt-8 space-y-6">
-                    {/* Presets Title */}
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-3.5">
-                        Repeat on
-                      </h4>
-                      {/* Presets Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <RecurringPresetCard
-                          title="All day"
-                          subtitle="Every day"
-                          icon={Calendar}
-                          active={preset === "every-day"}
-                          onClick={() => handlePresetChange("every-day")}
-                          colorTheme="violet"
+                    {/* Until Complete Checkbox Card */}
+                    <div className="p-4 rounded-2xl border border-zinc-150 bg-zinc-50/50 dark:border-zinc-800/80 dark:bg-zinc-900/10">
+                      <label className="flex items-start gap-3 cursor-pointer select-none group">
+                        <input
+                          type="checkbox"
+                          checked={untilComplete}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setUntilComplete(checked);
+                            if (checked) {
+                              // If continuity is checked, clear recurrence selections
+                              setSelectedDays([]);
+                              setPreset("custom");
+                            }
+                          }}
+                          className="size-4.5 mt-0.5 rounded-md border-zinc-300 text-violet-600 focus:ring-violet-500 dark:border-zinc-800 dark:bg-zinc-900 dark:focus:ring-offset-zinc-950"
                         />
-                        <RecurringPresetCard
-                          title="Weekdays"
-                          subtitle="Mon – Fri"
-                          icon={Sun}
-                          active={preset === "weekdays"}
-                          onClick={() => handlePresetChange("weekdays")}
-                          colorTheme="amber"
-                        />
-                        <RecurringPresetCard
-                          title="Weekends"
-                          subtitle="Sat – Sun"
-                          icon={Coffee}
-                          active={preset === "weekends"}
-                          onClick={() => handlePresetChange("weekends")}
-                          colorTheme="blue"
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-zinc-805 dark:text-zinc-200 group-hover:text-zinc-950 dark:group-hover:text-zinc-50 transition-colors">
+                            Until Complete
+                          </span>
+                          <span className="text-xs text-zinc-505 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                            If unfinished, this task automatically moves to each new day until completed.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className={cn("space-y-6 transition-opacity", untilComplete && "opacity-45 pointer-events-none")}>
+                      {/* Presets Title */}
+                      <div>
+                        <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-3.5">
+                          Repeat on
+                        </h4>
+                        {/* Presets Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <RecurringPresetCard
+                            title="All day"
+                            subtitle="Every day"
+                            icon={Calendar}
+                            active={preset === "every-day"}
+                            onClick={() => handlePresetChange("every-day")}
+                            colorTheme="violet"
+                          />
+                          <RecurringPresetCard
+                            title="Weekdays"
+                            subtitle="Mon – Fri"
+                            icon={Sun}
+                            active={preset === "weekdays"}
+                            onClick={() => handlePresetChange("weekdays")}
+                            colorTheme="amber"
+                          />
+                          <RecurringPresetCard
+                            title="Weekends"
+                            subtitle="Sat – Sun"
+                            icon={Coffee}
+                            active={preset === "weekends"}
+                            onClick={() => handlePresetChange("weekends")}
+                            colorTheme="blue"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Custom Weekday Selection Grid */}
+                      <div className="pt-1">
+                        <RecurringWeekdaySelector
+                          selectedDays={selectedDays}
+                          onChange={handleDaysChange}
                         />
                       </div>
                     </div>
 
-                    {/* Custom Weekday Selection Grid */}
-                    <div className="pt-1">
-                      <RecurringWeekdaySelector
-                        selectedDays={selectedDays}
-                        onChange={handleDaysChange}
-                      />
+                    {/* Duration Selection Grid */}
+                    <div className="pt-1 border-t border-zinc-150 dark:border-zinc-900 pt-4">
+                      <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-3.5">
+                        Duration
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
+                            Start Date
+                          </label>
+                          <Input
+                            type="date"
+                            min={todayStr}
+                            value={startDate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setStartDate(val);
+                              if (endDate && val && endDate < val) {
+                                setEndDate("");
+                              }
+                            }}
+                            className="w-full text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
+                            End Date (Optional)
+                          </label>
+                          <Input
+                            type="date"
+                            min={startDate || todayStr}
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="w-full text-xs"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* Promo Consistency Banner */}
@@ -180,9 +275,9 @@ export function RecurringDialog({
                         Cancel
                       </button>
                     </Dialog.Close>
-                    <button
+                     <button
                       type="button"
-                      onClick={() => onSave(selectedDays)}
+                      onClick={handleSave}
                       className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-sm font-semibold text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
                     >
                       Save

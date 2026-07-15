@@ -1,7 +1,15 @@
 "use server";
 
 import mongoose from "mongoose";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+
+function revalidatePath(path: string) {
+  try {
+    nextRevalidatePath(path);
+  } catch {
+    // Suppress invariant error when executing outside request cycle
+  }
+}
 import { DEFAULT_CATEGORIES, SPRINT_RULES } from "@/lib/constants";
 import { connectDB } from "@/lib/db";
 import { serializeCategory, serializeSprint, serializeRule, serializeBrainDumpThought } from "@/lib/serializers";
@@ -12,7 +20,7 @@ import { Sprint } from "@/models/Sprint";
 import { Task } from "@/models/Task";
 import { BrainDumpThought } from "@/models/BrainDumpThought";
 import type { AnalyticsData, Category, CategoryDTO, SprintDTO, RuleDTO, BrainDumpThoughtDTO } from "@/types/sprint";
-import { isoDate, formatSprintDate } from "@/utils/date";
+import { isoDate, formatSprintDate, parseLocalInputValueToUTC } from "@/utils/date";
 import { getServerTimeZone } from "@/utils/dateServer";
 import { calculateProductivity } from "@/utils/productivity";
 
@@ -192,6 +200,17 @@ export async function createSprint(date?: string) {
   });
 
   const tasksToDuplicate = uniqueRecurring.filter((task) => {
+    // Check start date (inclusive)
+    if (task.recurringStartDate) {
+      const localStart = isoDate(task.recurringStartDate, tz);
+      if (targetDate < localStart) return false;
+    }
+    // Check end date (inclusive)
+    if (task.recurringEndDate) {
+      const localEnd = isoDate(task.recurringEndDate, tz);
+      if (targetDate > localEnd) return false;
+    }
+
     if (!task.recurringDays || task.recurringDays.length === 0) {
       return true;
     }
@@ -207,9 +226,35 @@ export async function createSprint(date?: string) {
         completed: false,
         isRecurring: true,
         recurringDays: task.recurringDays || [],
+        recurringStartDate: task.recurringStartDate || null,
+        recurringEndDate: task.recurringEndDate || null,
         order: index,
       })),
     );
+  }
+
+  // Roll forward active "Until Complete" tasks from the previous sprint
+  const previousSprint = await Sprint.findOne({
+    date: { $lt: targetDate, $ne: "braindump" }
+  }).sort({ date: -1 }).lean();
+
+  if (previousSprint) {
+    const activeUntilCompleteTasks = await Task.find({
+      sprintId: previousSprint._id,
+      untilComplete: true,
+      completed: false,
+    });
+
+    if (activeUntilCompleteTasks.length > 0) {
+      const eodUTC = parseLocalInputValueToUTC(`${targetDate}T23:59`, tz);
+      await Task.updateMany(
+        { _id: { $in: activeUntilCompleteTasks.map((t) => t._id) } },
+        {
+          sprintId: sprint._id,
+          deadlineAt: eodUTC ? new Date(eodUTC) : null,
+        }
+      );
+    }
   }
 
   await recalculateSprint(String(sprint._id));
@@ -331,7 +376,16 @@ export async function addTask(sprintId: string, input: unknown) {
   await connectDB();
   const data = taskInputSchema.parse(input);
   const order = data.order ?? (await Task.countDocuments({ sprintId, category: data.category }));
-  await Task.create({ sprintId, ...data, order });
+  
+  const taskData = { ...data };
+  if (data.untilComplete === true) {
+    taskData.isRecurring = false;
+    taskData.recurringDays = [];
+    taskData.recurringStartDate = null;
+    taskData.recurringEndDate = null;
+  }
+
+  await Task.create({ sprintId, ...taskData, order });
   await recalculateSprint(sprintId);
   revalidatePath(`/sprints/${sprintId}`);
   return sprintWithTasks(sprintId);
@@ -342,6 +396,16 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
   const data = taskUpdateSchema.parse(input);
   const { highlight, ...rawUpdates } = data;
   const updates: Record<string, unknown> = { ...rawUpdates };
+
+  // Mutually exclusive: untilComplete vs isRecurring
+  if (rawUpdates.untilComplete === true) {
+    updates.isRecurring = false;
+    updates.recurringDays = [];
+    updates.recurringStartDate = null;
+    updates.recurringEndDate = null;
+  } else if (rawUpdates.isRecurring === true) {
+    updates.untilComplete = false;
+  }
 
   if (updates.completed === true) {
     const current = await Task.findOne({ _id: taskId, sprintId }).lean();

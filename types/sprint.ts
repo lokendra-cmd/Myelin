@@ -33,6 +33,9 @@ export type TaskDTO = {
   completed: boolean;
   isRecurring: boolean;
   recurringDays?: number[];
+  recurringStartDate?: string | null;
+  recurringEndDate?: string | null;
+  untilComplete?: boolean;
   deadlineAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;

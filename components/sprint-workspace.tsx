@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
 import { TaskModal } from "@/components/tasks/TaskModal";
 import { Button } from "@/components/ui/button";
@@ -553,10 +553,17 @@ export function SprintWorkspace({
             onOpenChange={(open) => {
               if (!open) setRecurringTask(null);
             }}
-            onSave={async (recurringDays) => {
+            timeZone={timeZone}
+            onSave={async (recurringDays, recurringStartDate, recurringEndDate, untilComplete) => {
               if (recurringTask) {
                 const isRecurring = recurringDays.length > 0;
-                await updateTask(recurringTask._id, { isRecurring, recurringDays });
+                await updateTask(recurringTask._id, {
+                  isRecurring,
+                  recurringDays,
+                  recurringStartDate,
+                  recurringEndDate,
+                  untilComplete,
+                });
                 setRecurringTask(null);
               }
             }}
@@ -851,6 +858,20 @@ function TaskItem({
                   Add deadline
                 </span>
               )}
+
+              {task.isRecurring && (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 border border-violet-100/50 dark:border-violet-900/30 rounded px-1.5 py-0.5 select-none">
+                  <Repeat className="size-3" />
+                  Recurring
+                </span>
+              )}
+
+              {task.untilComplete && (
+                <span className="flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border border-blue-100/50 dark:border-blue-900/30 rounded px-1.5 py-0.5 select-none">
+                  <CircleDot className="size-3" />
+                  Until Complete
+                </span>
+              )}
             </div>
             {isInProgress && (
               <div className="flex items-center gap-1 mt-1.5 bg-emerald-50/50 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-100/30">
@@ -884,8 +905,12 @@ function TaskItem({
                   {/* Recurring */}
                   <TaskActionIcon
                     icon={Repeat}
-                    tooltip={task.isRecurring ? "Edit Recurrence" : "Set Recurring"}
-                    active={task.isRecurring}
+                    tooltip={
+                      task.untilComplete || task.isRecurring
+                        ? "Edit Recurrence / Continuity"
+                        : "Set Recurrence / Continuity"
+                    }
+                    active={task.untilComplete || task.isRecurring}
                     activeColor="violet"
                     onClick={() => onConfigureRecurring(task)}
                   />
