@@ -48,6 +48,28 @@ async function sprintWithTasks(id: string): Promise<SprintDTO | null> {
   return serializeSprint(sprint, tasks);
 }
 
+// Batch-load tasks for many sprints in a SINGLE query and group them in memory.
+// Avoids the N+1 pattern of running one Task.find() per sprint against remote Atlas.
+async function serializeSprintsWithTasks(
+  sprints: Array<Record<string, unknown> & { _id: unknown }>,
+): Promise<SprintDTO[]> {
+  if (sprints.length === 0) return [];
+  const ids = sprints.map((sprint) => sprint._id);
+  const tasks = await Task.find({ sprintId: { $in: ids } })
+    .sort({ category: 1, order: 1 })
+    .lean();
+
+  const tasksBySprint = new Map<string, Record<string, unknown>[]>();
+  for (const task of tasks) {
+    const key = String(task.sprintId);
+    const bucket = tasksBySprint.get(key);
+    if (bucket) bucket.push(task);
+    else tasksBySprint.set(key, [task]);
+  }
+
+  return sprints.map((sprint) => serializeSprint(sprint, tasksBySprint.get(String(sprint._id)) ?? []));
+}
+
 export async function getSprint(id: string) {
   await connectDB();
   const sprint = await sprintWithTasks(id);
@@ -268,9 +290,7 @@ export async function getDashboardData() {
   const tz = await getServerTimeZone();
   const todayDate = isoDate(undefined, tz);
   const recentDocs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: -1 }).limit(7).lean();
-  const recent = await Promise.all(
-    recentDocs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())),
-  );
+  const recent = await serializeSprintsWithTasks(recentDocs);
   const today = recent.find((sprint) => sprint.date === todayDate) ?? (await getSprintByDate(todayDate));
   return { today, recent, currentStreak: getStreak(recent, tz) };
 }
@@ -278,7 +298,7 @@ export async function getDashboardData() {
 export async function getWeeklyReview() {
   await connectDB();
   const docs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: -1 }).limit(14).lean();
-  return Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
+  return serializeSprintsWithTasks(docs);
 }
 
 export async function deleteSprintAction(sprintId: string) {
@@ -296,7 +316,7 @@ export async function getAnalytics(): Promise<AnalyticsData> {
   const tz = await getServerTimeZone();
   const categories = await getCategories();
   const docs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: 1 }).limit(31).lean();
-  const sprints = await Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
+  const sprints = await serializeSprintsWithTasks(docs);
   const categoryLabels = new Map(categories.map((category) => [category.key, category.label]));
   const categoryMap = new Map<Category, { completed: number; total: number }>(categories.map((category) => [category.key, { completed: 0, total: 0 }]));
 
@@ -477,7 +497,7 @@ export async function searchSprints(query: string) {
     .sort({ date: -1 })
     .limit(12)
     .lean();
-  return Promise.all(docs.map(async (sprint) => serializeSprint(sprint, await Task.find({ sprintId: sprint._id }).lean())));
+  return serializeSprintsWithTasks(docs);
 }
 
 function getStreak(sprints: SprintDTO[], timeZone: string) {

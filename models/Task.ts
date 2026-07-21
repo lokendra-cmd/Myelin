@@ -28,6 +28,10 @@ const TaskSchema = new Schema(
   { timestamps: true },
 );
 
+// Matches the common access pattern: fetch a sprint's tasks sorted by
+// category then order. Also serves the batched { sprintId: { $in } } loads.
+TaskSchema.index({ sprintId: 1, category: 1, order: 1 });
+
 export type TaskDocument = InferSchemaType<typeof TaskSchema>;
 
 if (mongoose.models.Task) {

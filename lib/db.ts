@@ -21,6 +21,13 @@ export async function connectDB() {
   cached.promise ??= mongoose.connect(MONGODB_URI, {
     bufferCommands: false,
     dbName: process.env.MONGODB_DB || "sprint",
+    // Keep warm connections open so requests after idle periods don't pay the
+    // full Atlas connect cost (DNS SRV lookup + TLS handshake + auth).
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    // Fail fast instead of hanging when the cluster is unreachable.
+    serverSelectionTimeoutMS: 8000,
+    socketTimeoutMS: 45000,
   });
 
   cached.conn = await cached.promise;
