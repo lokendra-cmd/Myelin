@@ -74,3 +74,19 @@ body {
   animation: scaleUp 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ─── Premium loading shimmer ────────────────────────────────────── */
+@keyframes shimmerSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmerSweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none;
+  }
+}
+
