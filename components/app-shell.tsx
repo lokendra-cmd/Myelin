@@ -19,7 +19,22 @@ const nav = [
   { href: "/brain-dump", label: "Brain Dump", icon: Brain },
 ];
 
-function NavLinkContent({
+function useNavPendingBroadcast(pending: boolean) {
+  useEffect(() => {
+    if (!pending) return;
+    window.dispatchEvent(new CustomEvent("myelin:nav-pending", { detail: true }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("myelin:nav-pending", { detail: false }));
+    };
+  }, [pending]);
+}
+
+function isNavActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function DesktopNavLinkContent({
   label,
   icon: Icon,
   active,
@@ -29,14 +44,7 @@ function NavLinkContent({
   active: boolean;
 }) {
   const { pending } = useLinkStatus();
-
-  useEffect(() => {
-    if (!pending) return;
-    window.dispatchEvent(new CustomEvent("myelin:nav-pending", { detail: true }));
-    return () => {
-      window.dispatchEvent(new CustomEvent("myelin:nav-pending", { detail: false }));
-    };
-  }, [pending]);
+  useNavPendingBroadcast(pending);
 
   return (
     <span
@@ -49,21 +57,51 @@ function NavLinkContent({
       )}
     >
       <span className="relative grid size-4 place-items-center">
-        <Icon
-          className={cn(
-            "size-4 transition-opacity",
-            pending && "opacity-0",
-          )}
-        />
+        <Icon className={cn("size-4 transition-opacity", pending && "opacity-0")} />
         {pending ? (
           <motion.span
-            className="absolute inset-0 rounded-full border-2 border-zinc-400 border-t-zinc-950 dark:border-zinc-600 dark:border-t-zinc-50"
+            className="absolute inset-0 rounded-full border-2 border-zinc-400 border-t-accent dark:border-zinc-600 dark:border-t-accent"
             animate={{ rotate: 360 }}
             transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
           />
         ) : null}
       </span>
       {label}
+    </span>
+  );
+}
+
+function BottomNavItem({
+  label,
+  icon: Icon,
+  active,
+}: {
+  label: string;
+  icon: React.ElementType;
+  active: boolean;
+}) {
+  const { pending } = useLinkStatus();
+  useNavPendingBroadcast(pending);
+
+  return (
+    <span
+      className={cn(
+        "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition",
+        active ? "bg-accent-soft text-accent" : "text-zinc-400 dark:text-zinc-500",
+        pending && "text-accent",
+      )}
+    >
+      <span className="relative grid size-5 place-items-center">
+        <Icon className={cn("size-5 transition-opacity", pending && "opacity-0", active && "text-accent")} />
+        {pending ? (
+          <motion.span
+            className="absolute inset-0 rounded-full border-2 border-accent/30 border-t-accent"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+          />
+        ) : null}
+      </span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }
@@ -95,7 +133,7 @@ function NavigationProgress() {
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="h-full w-1/3 bg-zinc-950 dark:bg-zinc-50"
+            className="h-full w-1/3 bg-accent"
             initial={{ x: "-100%" }}
             animate={{ x: "400%" }}
             transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
@@ -125,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f7f7f5] text-zinc-950 dark:bg-[#090909] dark:text-zinc-50">
+    <div className="min-h-screen overflow-x-hidden bg-[#f7f7f5] text-zinc-950 dark:bg-[#090909] dark:text-zinc-50">
       <NavigationProgress />
       <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-[#f7f7f5]/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-[#090909]/80">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
@@ -136,24 +174,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="hidden items-center gap-1 md:flex">
             {nav.map((item) => (
               <Link key={item.href} href={item.href} prefetch>
-                <NavLinkContent
+                <DesktopNavLinkContent
                   label={item.label}
                   icon={item.icon}
-                  active={pathname === item.href}
+                  active={isNavActive(pathname, item.href)}
                 />
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" title="Command palette" onClick={() => setCommandOpen(true)}>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Command palette"
+              onClick={() => setCommandOpen(true)}
+              className="hidden sm:inline-flex"
+            >
               <Command className="size-4" />
             </Button>
             <ThemeToggle />
-            <NewSprintButton size="sm" />
+            <span className="hidden md:inline-flex">
+              <NewSprintButton size="sm" />
+            </span>
+            <span className="md:hidden">
+              <NewSprintButton
+                iconOnly
+                size="round"
+                variant="accent"
+                label="New Myelination"
+                className="bg-accent-soft text-accent hover:brightness-95 dark:text-accent"
+              />
+            </span>
           </div>
         </div>
       </header>
-      {children}
+
+      <div className="min-w-0 overflow-x-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        {children}
+      </div>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="mx-auto flex max-w-lg items-stretch gap-1 px-2 py-1.5">
+          {nav.map((item) => (
+            <Link key={item.href} href={item.href} prefetch className="flex min-w-0 flex-1">
+              <BottomNavItem
+                label={item.label}
+                icon={item.icon}
+                active={isNavActive(pathname, item.href)}
+              />
+            </Link>
+          ))}
+        </div>
+      </nav>
+
       <CommandPalette />
     </div>
   );

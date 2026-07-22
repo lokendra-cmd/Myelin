@@ -1,36 +1,73 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { MoreHorizontal, PieChart, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { AnalyticsData } from "@/types/sprint";
 
+const ACCENT = "#8b5cf6";
+
 export function AnalyticsCharts({ data }: { data: AnalyticsData }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-      <Card className="p-5">
-        <h2 className="text-sm font-medium text-zinc-500">Daily Productivity</h2>
-        <div className="mt-4 h-72">
+    <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr] lg:gap-6">
+      <Card className="rounded-2xl p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="grid size-8 place-items-center rounded-lg bg-accent-soft text-accent">
+              <TrendingUp className="size-4" />
+            </div>
+            <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Daily Productivity</h2>
+          </div>
+          <MoreHorizontal className="size-4 text-zinc-400" />
+        </div>
+        <div className="mt-4 h-64 sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.daily}>
+            <AreaChart data={data.daily}>
+              <defs>
+                <linearGradient id="productivityFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={ACCENT} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={ACCENT} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} domain={[0, 100]} />
+              <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+              <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Line type="monotone" dataKey="productivity" stroke="currentColor" strokeWidth={2} dot={false} />
-            </LineChart>
+              <Area
+                type="monotone"
+                dataKey="productivity"
+                stroke={ACCENT}
+                strokeWidth={2.5}
+                fill="url(#productivityFill)"
+                dot={false}
+              />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </Card>
-      <Card className="p-5">
-        <h2 className="text-sm font-medium text-zinc-500">Category Completion</h2>
-        <div className="mt-4 h-72">
+      <Card className="rounded-2xl p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="grid size-8 place-items-center rounded-lg bg-accent-soft text-accent">
+              <PieChart className="size-4" />
+            </div>
+            <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Category Completion</h2>
+          </div>
+          <MoreHorizontal className="size-4 text-zinc-400" />
+        </div>
+        <div className="mt-4 h-64 sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.categories.map((item) => ({ name: item.label, percent: item.total ? Math.round((item.completed / item.total) * 100) : 0 }))}>
+            <BarChart
+              data={data.categories.map((item) => ({
+                name: item.label,
+                percent: item.total ? Math.round((item.completed / item.total) * 100) : 0,
+              }))}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} />
-              <XAxis dataKey="name" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} domain={[0, 100]} />
+              <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} />
+              <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="percent" fill="currentColor" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="percent" fill={ACCENT} radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

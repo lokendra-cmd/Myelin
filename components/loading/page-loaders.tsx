@@ -25,15 +25,15 @@ const item = {
 
 function LoadingMark({ label }: { label: string }) {
   return (
-    <div className="mb-6 flex items-center gap-3">
+    <div className="mb-5 flex items-center gap-3">
       <div className="relative grid size-9 place-items-center">
         <motion.span
-          className="absolute inset-0 rounded-full border border-zinc-300/80 dark:border-zinc-700"
+          className="absolute inset-0 rounded-full border border-accent/30"
           animate={{ scale: [1, 1.35, 1], opacity: [0.55, 0, 0.55] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.span
-          className="absolute inset-1 rounded-full border border-zinc-400/50 dark:border-zinc-600"
+          className="absolute inset-1 rounded-full border border-accent/40"
           animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0, 0.4] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", delay: 0.25 }}
         />
@@ -61,9 +61,9 @@ function LoadingMark({ label }: { label: string }) {
 
 function ProgressRail() {
   return (
-    <div className="mb-6 h-[2px] w-full overflow-hidden rounded-full bg-zinc-200/80 dark:bg-zinc-800">
+    <div className="mb-5 h-[2px] w-full overflow-hidden rounded-full bg-accent-soft">
       <motion.div
-        className="h-full w-1/3 rounded-full bg-zinc-950 dark:bg-zinc-100"
+        className="h-full w-1/3 rounded-full bg-accent"
         animate={{ x: ["-120%", "320%"] }}
         transition={{ duration: 1.35, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -103,33 +103,36 @@ function Bone({ className }: { className?: string }) {
 
 export function TodayPageLoader() {
   return (
-    <Shell label="Loading today" className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-3">
-            <Bone className="h-4 w-40" />
-            <Bone className="h-10 w-72 max-w-full" />
-          </div>
-          <Bone className="h-9 w-36" />
+    <Shell label="Loading today" className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <div className="space-y-5">
+        <div className="space-y-2">
+          <Bone className="h-9 w-64 max-w-full rounded-xl" />
+          <Bone className="h-4 w-48 lg:hidden" />
         </div>
+        <Bone className="h-12 w-full rounded-2xl lg:hidden" />
 
         <motion.div
           variants={item}
-          className="overflow-hidden rounded-lg border border-zinc-200/80 bg-white/70 p-6 dark:border-zinc-800 dark:bg-zinc-950/60"
+          className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/70 p-5 dark:border-zinc-800 dark:bg-zinc-950/60"
         >
-          <div className="grid gap-6 md:grid-cols-[1fr_220px]">
-            <div className="space-y-6">
+          <div className="grid gap-5 md:grid-cols-[1fr_160px] md:items-center">
+            <div className="space-y-4">
               <Bone className="h-4 w-36" />
-              <Bone className="h-8 w-56" />
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Bone className="h-20" />
-                <Bone className="h-20" />
-                <Bone className="h-20" />
+              <Bone className="h-7 w-48" />
+              <div className="space-y-3 md:hidden">
+                <Bone className="h-4 w-40" />
+                <Bone className="h-4 w-32" />
+                <Bone className="h-4 w-36" />
+              </div>
+              <div className="hidden gap-3 md:grid md:grid-cols-3">
+                <Bone className="h-20 rounded-xl" />
+                <Bone className="h-20 rounded-xl" />
+                <Bone className="h-20 rounded-xl" />
               </div>
             </div>
             <div className="grid place-items-center">
               <motion.div
-                className="size-36 rounded-full border-[10px] border-zinc-200 border-t-zinc-950 dark:border-zinc-800 dark:border-t-zinc-100"
+                className="size-32 rounded-full border-[10px] border-zinc-200 border-t-accent dark:border-zinc-800"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
               />
@@ -139,17 +142,27 @@ export function TodayPageLoader() {
 
         <div>
           <Bone className="mb-3 h-4 w-24" />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="-mx-4 flex gap-3 overflow-hidden px-4 lg:hidden">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Bone key={i} className="h-28" />
+              <Bone key={i} className="h-24 w-[108px] shrink-0 rounded-2xl" />
+            ))}
+          </div>
+          <div className="hidden gap-3 lg:grid lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Bone key={i} className="h-28 rounded-2xl" />
             ))}
           </div>
         </div>
+
+        <div className="space-y-4 lg:hidden">
+          <Bone className="h-36 rounded-2xl" />
+          <Bone className="h-40 rounded-2xl" />
+        </div>
       </div>
 
-      <aside className="space-y-6">
-        <Bone className="h-40" />
-        <Bone className="h-44" />
+      <aside className="hidden space-y-6 lg:block">
+        <Bone className="h-40 rounded-2xl" />
+        <Bone className="h-44 rounded-2xl" />
       </aside>
     </Shell>
   );
@@ -160,25 +173,30 @@ export function ReviewPageLoader() {
     <Shell label="Loading review">
       <div className="space-y-3">
         <Bone className="h-4 w-28" />
-        <Bone className="h-10 w-64" />
+        <Bone className="h-9 w-56" />
+      </div>
+      <div className="mt-5 flex items-center justify-between">
+        <Bone className="h-10 w-48 rounded-xl" />
+        <Bone className="size-9 rounded-xl" />
+      </div>
+      <div className="mt-4 space-y-3 md:hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Bone key={i} className="h-[72px] rounded-2xl" />
+        ))}
+        <Bone className="h-24 rounded-2xl" />
       </div>
       <motion.div
         variants={item}
-        className="mt-6 overflow-hidden rounded-lg border border-zinc-200/80 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/60"
+        className="mt-4 hidden overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/70 dark:border-zinc-800 dark:bg-zinc-950/60 md:block"
       >
         <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <motion.div
-              key={i}
-              variants={item}
-              className="flex items-center gap-4 px-4 py-4 sm:px-5"
-            >
-              <Shimmer className="h-10 w-10 shrink-0 rounded-full" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <Shimmer className="h-4 w-40 max-w-[50%]" />
-                <Shimmer className="h-3 w-24 max-w-[35%]" />
-              </div>
-              <Shimmer className="h-6 w-14" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <motion.div key={i} variants={item} className="flex items-center gap-4 px-4 py-4">
+              <Shimmer className="h-4 w-28" />
+              <Shimmer className="h-4 w-12" />
+              <Shimmer className="h-4 w-12" />
+              <Shimmer className="h-4 w-14" />
+              <Shimmer className="h-4 flex-1" />
             </motion.div>
           ))}
         </div>
@@ -189,19 +207,19 @@ export function ReviewPageLoader() {
 
 export function AnalyticsPageLoader() {
   return (
-    <Shell label="Loading analytics" className="space-y-6">
+    <Shell label="Loading analytics" className="space-y-5">
       <div className="space-y-3">
         <Bone className="h-4 w-32" />
-        <Bone className="h-10 w-52" />
+        <Bone className="h-9 w-44" />
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Bone key={i} className="h-24" />
+          <Bone key={i} className="h-28 rounded-2xl" />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Bone className="h-72" />
-        <Bone className="h-72" />
+        <Bone className="h-72 rounded-2xl" />
+        <Bone className="h-72 rounded-2xl" />
       </div>
     </Shell>
   );
@@ -209,14 +227,18 @@ export function AnalyticsPageLoader() {
 
 export function BrainDumpPageLoader() {
   return (
-    <Shell label="Loading brain dump" className="space-y-6">
-      <div className="space-y-3">
-        <Bone className="h-4 w-28" />
-        <Bone className="h-10 w-56" />
+    <Shell label="Loading brain dump" className="max-w-4xl space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Bone className="size-12 rounded-2xl" />
+          <Bone className="h-8 w-36" />
+        </div>
+        <Bone className="h-10 w-32 rounded-xl" />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Bone key={i} className="h-44" />
+      <Bone className="h-20 rounded-2xl" />
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Bone key={i} className="h-[68px] rounded-2xl" />
         ))}
       </div>
     </Shell>
@@ -242,20 +264,20 @@ export function SprintPageLoader() {
             <motion.div
               key={i}
               variants={item}
-              className="rounded-lg border border-zinc-200/80 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"
+              className="rounded-2xl border border-zinc-200/80 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"
             >
               <Shimmer className="mb-4 h-5 w-28" />
               <div className="space-y-3">
-                <Shimmer className="h-12 w-full" />
-                <Shimmer className="h-12 w-full" />
-                <Shimmer className="h-12 w-[85%]" />
+                <Shimmer className="h-12 w-full rounded-xl" />
+                <Shimmer className="h-12 w-full rounded-xl" />
+                <Shimmer className="h-12 w-[85%] rounded-xl" />
               </div>
             </motion.div>
           ))}
         </div>
         <div className="space-y-4">
-          <Bone className="h-40" />
-          <Bone className="h-52" />
+          <Bone className="h-40 rounded-2xl" />
+          <Bone className="h-52 rounded-2xl" />
         </div>
       </div>
     </Shell>

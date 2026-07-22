@@ -6,14 +6,24 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { CalendarDays, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { isoDate } from "@/utils/date";
 
 type NewSprintButtonProps = {
   label?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "round";
+  variant?: "default" | "accent" | "subtle" | "ghost";
+  className?: string;
+  iconOnly?: boolean;
 };
 
-export function NewSprintButton({ label = "New Myelination", size = "md" }: NewSprintButtonProps) {
+export function NewSprintButton({
+  label = "New Myelination",
+  size = "md",
+  variant = "default",
+  className,
+  iconOnly = false,
+}: NewSprintButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(() => isoDate());
@@ -46,17 +56,17 @@ export function NewSprintButton({ label = "New Myelination", size = "md" }: NewS
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button size={size}>
+        <Button size={size} variant={variant} className={cn(className)} title={label} aria-label={label}>
           <Plus className="size-4" />
-          {label}
+          {!iconOnly ? label : null}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm dark:bg-black/50" />
         <Dialog.Content className="fixed left-1/2 top-24 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-lg border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
           <div className="flex items-start gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-md bg-zinc-100 dark:bg-zinc-900">
-              <CalendarDays className="size-5 text-zinc-500" />
+            <div className="grid size-10 shrink-0 place-items-center rounded-md bg-accent-soft">
+              <CalendarDays className="size-5 text-accent" />
             </div>
             <div>
               <Dialog.Title className="text-lg font-semibold">New Myelination</Dialog.Title>
@@ -76,7 +86,7 @@ export function NewSprintButton({ label = "New Myelination", size = "md" }: NewS
               <Dialog.Close asChild>
                 <Button type="button" variant="ghost">Cancel</Button>
               </Dialog.Close>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" variant="accent" disabled={loading}>
                 {loading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                 Create or Open
               </Button>
