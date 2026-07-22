@@ -216,11 +216,11 @@ export function BrainDumpWorkspace({
       {/* Header section */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="grid size-12 place-items-center rounded-2xl bg-violet-100 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400">
-            <Brain className="size-6 animate-pulse" />
+          <div className="grid size-12 place-items-center rounded-2xl bg-accent-soft text-accent">
+            <Brain className="size-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-normal mt-1 flex items-center gap-2">
+            <h1 className="mt-1 flex items-center gap-2 text-3xl font-bold tracking-normal">
               Brain Dump
             </h1>
           </div>
@@ -228,17 +228,17 @@ export function BrainDumpWorkspace({
 
         <button
           onClick={() => setCategoryModalOpen(true)}
-          className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200 transition shadow-sm"
+          className="inline-flex h-10 items-center justify-center rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
         >
-          <Plus className="size-4 mr-1.5 stroke-[2.5]" />
+          <Plus className="mr-1.5 size-4 stroke-[2.5]" />
           New Category
         </button>
       </div>
 
       {/* Banner */}
-      <div className="relative flex items-start justify-between rounded-2xl bg-violet-50/55 p-4 dark:bg-violet-950/15 border border-violet-100/60 dark:border-violet-900/30">
+      <div className="relative flex items-start justify-between rounded-2xl border border-accent/15 bg-accent-soft/70 p-4 dark:bg-accent-soft/40">
         <div className="flex gap-3">
-          <div className="grid size-8 place-items-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400 shrink-0">
+          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/70 text-accent dark:bg-zinc-950/40">
             <Sparkles className="size-4" />
           </div>
           <div className="space-y-0.5">
@@ -279,12 +279,10 @@ export function BrainDumpWorkspace({
             return (
               <Card
                 key={category.key}
-                className="overflow-hidden border border-zinc-200/80 bg-white dark:border-zinc-800/80 dark:bg-zinc-950/60 shadow-sm transition hover:shadow"
+                className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm transition hover:shadow dark:border-zinc-800/80 dark:bg-zinc-950/60"
               >
                 {/* Category Accordion Header Row */}
-                <div
-                  className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30"
-                >
+                <div className="flex w-full items-center justify-between px-4 py-3.5 text-left transition hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 sm:px-5 sm:py-4">
                   <button
                     type="button"
                     onClick={() => toggleCategory(category.key)}
@@ -292,7 +290,7 @@ export function BrainDumpWorkspace({
                   >
                     <div
                       className={cn(
-                        "size-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border border-white/40 dark:border-zinc-800/30",
+                        "flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/40 shadow-sm dark:border-zinc-800/30",
                         theme.accentBg
                       )}
                     >
@@ -302,13 +300,18 @@ export function BrainDumpWorkspace({
                         <span className="text-lg leading-none">📁</span>
                       )}
                     </div>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200 text-base">
-                      {category.label}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="block truncate text-base font-semibold text-zinc-800 dark:text-zinc-200">
+                        {category.label}
+                      </span>
+                      <span className="mt-0.5 inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-900 sm:hidden">
+                        {categoryThoughts.length} {categoryThoughts.length === 1 ? "thought" : "thoughts"}
+                      </span>
+                    </div>
                   </button>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200/30 dark:border-zinc-800/50 px-2.5 py-0.5 text-xs font-medium text-zinc-500">
+                  <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                    <span className="hidden items-center rounded-full border border-zinc-200/30 bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:border-zinc-800/50 dark:bg-zinc-900 sm:inline-flex">
                       {categoryThoughts.length} {categoryThoughts.length === 1 ? "thought" : "thoughts"}
                     </span>
                     

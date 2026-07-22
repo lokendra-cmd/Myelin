@@ -21,12 +21,24 @@
   color-scheme: light;
   --background: #f7f7f5;
   --foreground: #171717;
+  --accent: #8b5cf6;
+  --accent-soft: #f3e8ff;
+  --accent-foreground: #ffffff;
 }
 
 .dark {
   color-scheme: dark;
   --background: #090909;
   --foreground: #ededed;
+  --accent: #a78bfa;
+  --accent-soft: #2e1065;
+  --accent-foreground: #09090b;
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-foreground: var(--accent-foreground);
 }
 
 /* ─── Base ───────────────────────────────────────────────────────── */
@@ -34,6 +46,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -82,6 +95,15 @@ body {
 
 .animate-shimmer {
   animation: shimmerSweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

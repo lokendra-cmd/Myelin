@@ -10,6 +10,7 @@ export function serializeTask(task: LeanTask): TaskDTO {
     sprintId: String(task.sprintId),
     title: String(task.title ?? ""),
     category: task.category as TaskDTO["category"],
+    habitId: task.habitId ? String(task.habitId) : null,
     completed: Boolean(task.completed),
     isRecurring: Boolean(task.isRecurring),
     recurringDays: Array.isArray(task.recurringDays) ? (task.recurringDays as number[]).map(Number) : [],
