@@ -247,36 +247,24 @@ export function BrainDumpPageLoader() {
 
 export function SprintPageLoader() {
   return (
-    <Shell label="Loading myelination" className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-3">
-          <Bone className="h-4 w-32" />
-          <Bone className="h-10 w-72 max-w-full" />
-        </div>
-        <div className="flex gap-2">
-          <Bone className="h-9 w-24" />
-          <Bone className="h-9 w-24" />
-        </div>
+    <Shell label="Loading myelination" className="min-w-0 space-y-5 overflow-x-hidden">
+      <div className="space-y-2">
+        <Bone className="h-4 w-28" />
+        <Bone className="h-9 w-64 max-w-full" />
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <motion.div
-              key={i}
-              variants={item}
-              className="rounded-2xl border border-zinc-200/80 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"
-            >
-              <Shimmer className="mb-4 h-5 w-28" />
-              <div className="space-y-3">
-                <Shimmer className="h-12 w-full rounded-xl" />
-                <Shimmer className="h-12 w-full rounded-xl" />
-                <Shimmer className="h-12 w-[85%] rounded-xl" />
-              </div>
-            </motion.div>
-          ))}
-        </div>
-        <div className="space-y-4">
+      <Bone className="h-32 w-full rounded-2xl lg:hidden" />
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="min-w-0 space-y-4">
           <Bone className="h-40 rounded-2xl" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Bone key={i} className="h-16 rounded-2xl" />
+          ))}
+          <Bone className="h-28 rounded-2xl lg:hidden" />
+          <Bone className="h-36 rounded-2xl lg:hidden" />
+        </div>
+        <div className="hidden space-y-4 lg:block">
+          <Bone className="h-40 rounded-2xl" />
+          <Bone className="h-36 rounded-2xl" />
           <Bone className="h-52 rounded-2xl" />
         </div>
       </div>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
 import { TaskModal } from "@/components/tasks/TaskModal";
 import { Button } from "@/components/ui/button";
@@ -298,11 +298,113 @@ export function SprintWorkspace({
     ? `Myelination ${formatSprintDate(sprint.date)}`
     : sprint.title;
 
+  const progressPanel = (
+    <Card className="rounded-2xl p-4 sm:p-6">
+      <div className="flex items-center gap-4 lg:block">
+        <div className="relative shrink-0 lg:mx-auto lg:grid lg:place-items-center">
+          <ProgressRing value={sprint.productivity} size={112} showLabel={false} className="lg:hidden" />
+          <ProgressRing value={sprint.productivity} className="hidden lg:grid" />
+          <div className="pointer-events-none absolute inset-0 grid place-items-center lg:hidden">
+            <div className="text-2xl font-bold tabular-nums">{sprint.productivity}%</div>
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 lg:mt-4 lg:text-center">
+          <div className="text-sm text-zinc-600 dark:text-zinc-300">
+            <span className="mr-1.5">{mood.emoji}</span>
+            {mood.label}
+          </div>
+          <div className="mt-3 inline-flex rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 lg:mt-4 lg:w-full lg:justify-center lg:rounded-md lg:px-3 lg:py-3 lg:text-sm">
+            Completed{" "}
+            <span className="ml-1 font-bold text-zinc-950 dark:text-zinc-50">
+              {sprint.completedTasks} / {sprint.totalTasks}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+
+  const highlightsPanel = (
+    <Card className="rounded-2xl p-4 sm:p-5">
+      <p className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        <Star className="size-4 text-accent" />
+        Highlight Tasks
+      </p>
+      <div className="mt-3 rounded-xl bg-zinc-100 p-4 dark:bg-zinc-900">
+        {highlightTasks.length ? (
+          <>
+            <p className="text-base font-semibold sm:text-lg">
+              {highlightTasks.filter((task) => task.completed).length === highlightTasks.length
+                ? "🎉 All highlights completed"
+                : "Active highlights"}
+            </p>
+            <p className="mt-2 text-sm text-zinc-500">{highlightTasks.map((task) => task.title).join(" · ")}</p>
+          </>
+        ) : (
+          <p className="text-sm text-zinc-500">Choose one or more tasks to keep in focus.</p>
+        )}
+      </div>
+    </Card>
+  );
+
+  const reflectionPanel = (
+    <Card className="rounded-2xl p-4 sm:p-5">
+      <p className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        <Pencil className="size-4 text-accent" />
+        End of Day
+      </p>
+      <div className="mt-3 space-y-3">
+        {(
+          [
+            ["wentWell", "What went well?"],
+            ["distracted", "What distracted you?"],
+            ["improve", "What can improve tomorrow?"],
+          ] as const
+        ).map(([key, label]) => (
+          <Textarea
+            key={key}
+            placeholder={label}
+            value={sprint.reflection[key]}
+            onChange={(event) => {
+              const reflection = { ...sprint.reflection, [key]: event.target.value };
+              setSprint({ ...sprint, reflection });
+              saveReflection(reflection);
+            }}
+          />
+        ))}
+      </div>
+    </Card>
+  );
+
   return (
-    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-4 py-6 sm:px-6">
       <Confetti active={sprint.productivity === 100 && sprint.totalTasks > 0} />
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+
+      {/* Mobile back + export */}
+      <div className="mb-4 flex items-center justify-between gap-2 lg:hidden">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
+        >
+          <ArrowLeft className="size-4" />
+          Today
+        </Link>
+        <div className="flex items-center gap-1">
+          <Button asChild variant="ghost" size="icon" title="Markdown export">
+            <Link href={`/api/sprints/${sprint._id}/markdown?tz=${encodeURIComponent(timeZone)}`}>
+              <FileText className="size-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="ghost" size="icon" title="PDF export">
+            <Link href={`/api/sprints/${sprint._id}/pdf?tz=${encodeURIComponent(timeZone)}`}>
+              <FileDown className="size-4" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-5 flex min-w-0 flex-col gap-4 lg:mb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
           <p className="text-sm text-zinc-500">{prettyDate(sprint.date, "long", timeZone)}</p>
           <input
             value={displayTitle}
@@ -310,43 +412,55 @@ export function SprintWorkspace({
               setSprint({ ...sprint, title: event.target.value });
               saveTitle(event.target.value);
             }}
-            className="mt-2 w-full bg-transparent text-4xl font-semibold tracking-normal outline-none"
+            className="mt-1 w-full min-w-0 bg-transparent text-[1.75rem] font-bold tracking-tight outline-none sm:text-4xl sm:font-semibold"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="subtle" size="sm"><Link href={`/api/sprints/${sprint._id}/markdown?tz=${encodeURIComponent(timeZone)}`}><ArrowDownToLine className="size-4" />Markdown</Link></Button>
-          <Button asChild variant="subtle" size="sm"><Link href={`/api/sprints/${sprint._id}/pdf?tz=${encodeURIComponent(timeZone)}`}><FileDown className="size-4" />PDF</Link></Button>
+        <div className="hidden items-center gap-2 lg:flex">
+          <Button asChild variant="subtle" size="sm">
+            <Link href={`/api/sprints/${sprint._id}/markdown?tz=${encodeURIComponent(timeZone)}`}>
+              <ArrowDownToLine className="size-4" />
+              Markdown
+            </Link>
+          </Button>
+          <Button asChild variant="subtle" size="sm">
+            <Link href={`/api/sprints/${sprint._id}/pdf?tz=${encodeURIComponent(timeZone)}`}>
+              <FileDown className="size-4" />
+              PDF
+            </Link>
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <section className="space-y-6">
-          {/* Daily Rules section — Matches attached design layout & aesthetics */}
-          <Card className="p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="grid size-10 place-items-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
+      {/* Progress first on mobile */}
+      <div className="mb-5 lg:hidden">{progressPanel}</div>
+
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0 space-y-5 sm:space-y-6">
+          {/* Daily Rules */}
+          <Card className="min-w-0 overflow-hidden rounded-2xl p-4 sm:p-6">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
                   <ShieldCheck className="size-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-50">Daily Rules</h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Principles that guide me every day.</p>
                 </div>
               </div>
               <button
                 onClick={() => setRuleModalOpen(true)}
-                className="h-9 px-4 rounded-lg border border-zinc-200 hover:border-violet-300 dark:border-zinc-800 hover:bg-violet-50/50 dark:hover:bg-violet-950/20 text-xs font-semibold text-violet-600 dark:text-violet-400 bg-white dark:bg-zinc-900 shadow-sm transition flex items-center gap-1.5 self-start sm:self-auto"
+                className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent transition hover:brightness-90 sm:h-9 sm:rounded-lg sm:border sm:border-zinc-200 sm:bg-white sm:px-4 sm:text-violet-600 sm:shadow-sm sm:hover:border-violet-300 sm:hover:bg-violet-50/50 dark:sm:border-zinc-800 dark:sm:bg-zinc-900 dark:sm:text-violet-400"
               >
                 <Plus className="size-3.5" />
-                Add New Rule
+                <span className="sm:hidden">Add Rule</span>
+                <span className="hidden sm:inline">Add New Rule</span>
               </button>
             </div>
 
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 mt-5">
+            <div className="mt-4 grid grid-cols-1 gap-3 md:mt-5 md:grid-cols-2 md:gap-4">
               {rules.map((rule) => {
-                // Resolve deterministic theme for this rule based on its ID
                 const theme = hashTheme(rule.id);
-                // Deriving local line color matching the themes system
                 const getLineColor = (themeId: string) => {
                   switch (themeId) {
                     case "forest": return "bg-emerald-500";
@@ -367,26 +481,23 @@ export function SprintWorkspace({
                     case "teal": return "bg-teal-500";
                     case "blue": return "bg-blue-500";
                     case "purple": return "bg-purple-500";
-                    default: return "bg-violet-500";
+                    default: return "bg-accent";
                   }
                 };
 
                 return (
                   <div
                     key={rule.id}
-                    className="min-h-[108px] h-full relative overflow-hidden rounded-2xl border border-zinc-100 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 flex items-center gap-3.5 group"
+                    className="group relative flex min-h-0 min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-zinc-100 bg-white p-3.5 shadow-sm transition-all hover:shadow-md dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 sm:min-h-[108px] sm:gap-3.5 sm:p-4"
                   >
-                    {/* Squircle Icon Container */}
-                    <div className={cn("size-12 rounded-[20px] flex items-center justify-center shrink-0 border border-white/50 dark:border-zinc-800", theme.accentBg)}>
+                    <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-2xl border border-white/50 dark:border-zinc-800 sm:size-12 sm:rounded-[20px]", theme.accentBg)}>
                       <DynamicIcon name={rule.icon} className={cn("size-5", theme.accentText)} fallback={ShieldCheck} />
                     </div>
 
-                    {/* Rule text clamped to max 3 lines */}
-                    <span className="text-[13px] font-medium leading-relaxed text-zinc-800 dark:text-zinc-200 flex-1 min-w-0 pr-4 line-clamp-3 break-words">
+                    <span className="min-w-0 flex-1 break-words pr-6 text-[13px] font-medium leading-relaxed text-zinc-800 line-clamp-3 dark:text-zinc-200">
                       {rule.text}
                     </span>
 
-                    {/* Reusable Three-dot Menu */}
                     <OverflowMenu
                       menuOpen={activeMenuId === rule.id}
                       onMenuOpenChange={(open) => setActiveMenuId(open ? rule.id : null)}
@@ -394,10 +505,9 @@ export function SprintWorkspace({
                       onDelete={() => deleteRule(rule.id)}
                       deleteConfirmTitle="Delete this rule?"
                       deleteConfirmSubtext="This action cannot be undone."
-                      className="absolute top-2 right-2"
+                      className="absolute right-2 top-2"
                     />
 
-                    {/* Bottom horizontal accent line */}
                     <div className={cn("absolute bottom-0 left-4 h-[3.5px] w-14 rounded-t-full", getLineColor(theme.id))} />
                   </div>
                 );
@@ -405,13 +515,14 @@ export function SprintWorkspace({
             </div>
           </Card>
 
-          {/* My Categories Header Section */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8 mt-4">
-            <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          {/* My Categories Header */}
+          <div className="mt-2 flex min-w-0 flex-col gap-3 sm:mt-4 sm:mb-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-0.5">
+              <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-xl">
+                <Sparkles className="size-4 text-accent sm:hidden" />
                 My Categories
               </h2>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="hidden text-sm text-zinc-500 dark:text-zinc-400 sm:block">
                 Organize your work into focused spaces.
               </p>
             </div>
@@ -419,10 +530,10 @@ export function SprintWorkspace({
               onClick={() => setCategoryModalOpen(true)}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 transition-colors dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-violet-700 dark:hover:bg-violet-950/30 dark:hover:text-violet-300 self-start sm:self-auto"
+              className="inline-flex items-center gap-2 self-start rounded-full border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-600 shadow-sm transition-colors hover:border-accent/40 hover:bg-accent-soft hover:text-accent dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
               aria-label="Create new category"
             >
-              <Sparkles className="size-3.5 text-violet-500" />
+              <Sparkles className="size-3.5 text-accent" />
               New Category
             </motion.button>
           </div>
@@ -466,8 +577,7 @@ export function SprintWorkspace({
                 });
                 if (!res.ok) throw new Error("Failed to update category");
                 const updated = await res.json();
-                
-                // Immediately update categories state
+
                 setCategories((current) =>
                   current.map((cat) =>
                     cat.key === editingCategory.key
@@ -598,7 +708,7 @@ export function SprintWorkspace({
             />
           )}
 
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-3 sm:space-y-6">
             {visibleCategories.map((category, index) => (
               <TaskSection
                 key={category.key}
@@ -630,51 +740,18 @@ export function SprintWorkspace({
               />
             ))}
           </div>
+
+          {/* Highlights + reflection after categories on mobile */}
+          <div className="space-y-4 pt-1 lg:hidden">
+            {highlightsPanel}
+            {reflectionPanel}
+          </div>
         </section>
 
-
-        <aside className="space-y-6">
-          <Card className="p-6">
-            <div className="grid place-items-center"><ProgressRing value={sprint.productivity} /></div>
-            <div className="mt-4 text-center text-sm text-zinc-500">{mood.emoji} {mood.label}</div>
-            <div className="mt-4 rounded-md bg-zinc-100 p-3 text-center text-sm dark:bg-zinc-900">Completed <span className="font-semibold text-zinc-950 dark:text-zinc-50">{sprint.completedTasks} / {sprint.totalTasks}</span></div>
-          </Card>
-          <Card className="p-5">
-            <p className="text-sm font-medium text-zinc-500">Highlight Tasks</p>
-            <div className="mt-4 rounded-md bg-zinc-100 p-4 dark:bg-zinc-900">
-              {highlightTasks.length ? (
-                <>
-                  <p className="text-lg font-semibold">
-                    {highlightTasks.filter((task) => task.completed).length === highlightTasks.length ? "🎉 All highlights completed" : "Active highlights"}
-                  </p>
-                  <p className="mt-2 text-sm text-zinc-500">{highlightTasks.map((task) => task.title).join(" · ")}</p>
-                </>
-              ) : (
-                <p className="text-sm text-zinc-500">Choose one or more tasks to keep in focus.</p>
-              )}
-            </div>
-          </Card>
-          <Card className="p-5">
-            <p className="text-sm font-medium text-zinc-500">End of Day</p>
-            <div className="mt-4 space-y-3">
-              {[
-                ["wentWell", "What went well?"],
-                ["distracted", "What distracted you?"],
-                ["improve", "What can improve tomorrow?"],
-              ].map(([key, label]) => (
-                <Textarea
-                  key={key}
-                  placeholder={label}
-                  value={sprint.reflection[key as keyof SprintDTO["reflection"]]}
-                  onChange={(event) => {
-                    const reflection = { ...sprint.reflection, [key]: event.target.value };
-                    setSprint({ ...sprint, reflection });
-                    saveReflection(reflection);
-                  }}
-                />
-              ))}
-            </div>
-          </Card>
+        <aside className="hidden min-w-0 space-y-6 lg:block">
+          {progressPanel}
+          {highlightsPanel}
+          {reflectionPanel}
         </aside>
       </div>
     </main>
@@ -812,7 +889,7 @@ function TaskItem({
           onDrop(category.key, task._id);
         }}
         className={cn(
-          "group relative border p-4 rounded-xl shadow-sm transition hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4",
+          "group relative flex min-w-0 flex-col justify-between gap-4 rounded-xl border p-3 shadow-sm transition hover:shadow-md sm:p-4 md:flex-row md:items-center",
           isCompleted 
             ? "bg-emerald-50/10 border-emerald-100/50 dark:bg-emerald-950/5 dark:border-emerald-950/20"
             : "bg-white/80 dark:bg-zinc-950/70 border-zinc-200/80 dark:border-zinc-800",
@@ -1171,11 +1248,11 @@ function TaskSection(props: {
   const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <Card className={cn("overflow-hidden ring-1", theme.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
+    <Card className={cn("min-w-0 overflow-hidden rounded-2xl ring-1", theme.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
       {/* ── Themed banner header ────────────────────────────────────── */}
-      <div className={cn("bg-gradient-to-br px-4 pt-4 pb-3", theme.gradient, theme.darkGradient)}>
+      <div className={cn("bg-gradient-to-br px-3 py-3 sm:px-4 sm:pt-4 sm:pb-3", theme.gradient, theme.darkGradient)}>
         <div
-          className="flex items-start justify-between gap-3 cursor-pointer select-none"
+          className="flex min-w-0 cursor-pointer select-none items-start justify-between gap-2 sm:gap-3"
           onClick={(e) => {
             // Only toggle if click is not on an action button / input
             const target = e.target as HTMLElement;
@@ -1187,9 +1264,9 @@ function TaskSection(props: {
           aria-controls={`category-body-${props.category.key}`}
         >
           {/* Left: icon + meta */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             {/* Circular icon */}
-            <div className={cn("size-11 rounded-full flex items-center justify-center shrink-0 shadow-sm border border-white/40", theme.accentBg)}>
+            <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full border border-white/40 shadow-sm sm:size-11", theme.accentBg)}>
               {hasIcon
                 ? <DynamicIcon name={props.category.icon!} className={cn("size-5", theme.accentText)} />
                 : <span className="text-lg leading-none">{props.category.emoji === "•" ? "📁" : props.category.emoji}</span>
@@ -1197,7 +1274,7 @@ function TaskSection(props: {
             </div>
             {/* Title + tagline */}
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {editingName ? (
                   <input
                     autoFocus
@@ -1215,12 +1292,12 @@ function TaskSection(props: {
                   <h2 className={cn("truncate text-sm font-bold", theme.accentText)}>{props.category.label}</h2>
                 )}
                 {/* Pending badge */}
-                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", theme.badge)}>
+                <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", theme.badge)}>
                   {pendingCount} pending
                 </span>
               </div>
               {props.category.tagline && (
-                <p className={cn("mt-0.5 text-[11px] italic truncate opacity-75", theme.accentText)}>
+                <p className={cn("mt-0.5 hidden truncate text-[11px] italic opacity-75 sm:block", theme.accentText)}>
                   &quot;{props.category.tagline}&quot;
                 </p>
               )}
@@ -1228,7 +1305,7 @@ function TaskSection(props: {
           </div>
 
           {/* Right: chevron + actions */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
             <motion.span
               animate={{ rotate: collapsed ? -90 : 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 28 }}
