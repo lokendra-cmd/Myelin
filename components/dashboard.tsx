@@ -22,7 +22,7 @@ export function Dashboard({ data, timeZone }: { data: DashboardData; timeZone: s
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm text-zinc-500">{prettyDate(new Date(), "long", timeZone)}</p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-normal">{greeting(timeZone)}, Lokendra</h1>
+            <h1 className="mt-2 text-4xl font-semibold tracking-normal">{greeting(timeZone)}, Sahil</h1>
           </div>
           <NewSprintButton />
         </div>
