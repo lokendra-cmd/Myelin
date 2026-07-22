@@ -30,6 +30,8 @@ export type TaskDTO = {
   sprintId: string;
   title: string;
   category: Category;
+  /** Stable identity for recurring habits. Null for one-off tasks. */
+  habitId?: string | null;
   completed: boolean;
   isRecurring: boolean;
   recurringDays?: number[];
@@ -46,6 +48,34 @@ export type TaskDTO = {
   order: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type AnalyticsRange = "7" | "30" | "all" | "custom";
+
+export type HabitStat = {
+  habitId: string;
+  title: string;
+  category: Category;
+  categoryLabel: string;
+  completedCount: number;
+  appearanceCount: number;
+  hitRate: number;
+  lastCompletedAt: string | null;
+  daysSinceLastDone: number | null;
+  recurringDays: number[];
+};
+
+export type AnalyticsData = {
+  range: AnalyticsRange;
+  from: string | null;
+  to: string | null;
+  daily: Array<{ date: string; productivity: number }>;
+  categories: Array<{ category: Category; label: string; completed: number; total: number }>;
+  habits: HabitStat[];
+  averageProductivity: number;
+  longestStreak: number;
+  bestDay: SprintDTO | null;
+  worstDay: SprintDTO | null;
 };
 
 export type SprintDTO = {
@@ -70,15 +100,6 @@ export type DashboardData = {
   today: SprintDTO | null;
   recent: SprintDTO[];
   currentStreak: number;
-};
-
-export type AnalyticsData = {
-  daily: Array<{ date: string; productivity: number }>;
-  categories: Array<{ category: Category; label: string; completed: number; total: number }>;
-  averageProductivity: number;
-  longestStreak: number;
-  bestDay: SprintDTO | null;
-  worstDay: SprintDTO | null;
 };
 
 export type BrainDumpThoughtDTO = {

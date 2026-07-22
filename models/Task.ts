@@ -5,6 +5,8 @@ const TaskSchema = new Schema(
     sprintId: { type: Schema.Types.ObjectId, ref: "Sprint", required: true, index: true },
     title: { type: String, required: true, trim: true },
     category: { type: String, required: true, index: true, trim: true },
+    /** Stable identity for recurring habits across sprints/renames. One-off tasks leave this null. */
+    habitId: { type: String, default: null, index: true },
     completed: { type: Boolean, default: false },
     isRecurring: { type: Boolean, default: false },
     recurringDays: { type: [Number], default: [] },

@@ -19,10 +19,11 @@ import { Rule as RuleModel } from "@/models/Rule";
 import { Sprint } from "@/models/Sprint";
 import { Task } from "@/models/Task";
 import { BrainDumpThought } from "@/models/BrainDumpThought";
-import type { AnalyticsData, Category, CategoryDTO, SprintDTO, RuleDTO, BrainDumpThoughtDTO } from "@/types/sprint";
+import type { AnalyticsData, AnalyticsRange, Category, CategoryDTO, HabitStat, SprintDTO, RuleDTO, BrainDumpThoughtDTO } from "@/types/sprint";
 import { isoDate, formatSprintDate, parseLocalInputValueToUTC } from "@/utils/date";
 import { getServerTimeZone } from "@/utils/dateServer";
 import { calculateProductivity } from "@/utils/productivity";
+import { ensureRecurringHabitIds, newHabitId } from "@/lib/habitId";
 
 async function recalculateSprint(sprintId: string) {
   const [completedTasks, totalTasks] = await Promise.all([
@@ -200,6 +201,7 @@ export async function deleteCategory(key: string, sprintId?: string) {
 
 export async function createSprint(date?: string) {
   await connectDB();
+  await ensureRecurringHabitIds();
   const tz = await getServerTimeZone();
   const targetDate = date || isoDate(undefined, tz);
   const existing = await Sprint.findOne({ date: targetDate }).lean();
@@ -209,13 +211,15 @@ export async function createSprint(date?: string) {
   const sprint = await Sprint.create({ date: targetDate, title, highlightTaskIds: [] });
   const dayOfWeek = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
 
-  // Fetch ALL recurring tasks but deduplicate by (title, category) so that copies-of-copies
-  // from previous sprints don't compound. We keep the first occurrence of each unique task.
+  // Fetch ALL recurring tasks but deduplicate by habitId (fallback: title+category) so that
+  // copies-of-copies from previous sprints don't compound. Keep the first of each unique habit.
   const allRecurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
 
   const seen = new Set<string>();
   const uniqueRecurring = allRecurring.filter((task) => {
-    const key = `${task.category}::${task.title.trim().toLowerCase()}`;
+    const key =
+      (task as { habitId?: string | null }).habitId ||
+      `${task.category}::${String(task.title ?? "").trim().toLowerCase()}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -245,6 +249,7 @@ export async function createSprint(date?: string) {
         sprintId: sprint._id,
         title: task.title,
         category: task.category,
+        habitId: (task as { habitId?: string | null }).habitId || newHabitId(),
         completed: false,
         isRecurring: true,
         recurringDays: task.recurringDays || [],
@@ -311,14 +316,170 @@ export async function deleteSprintAction(sprintId: string) {
   return { success: true };
 }
 
-export async function getAnalytics(): Promise<AnalyticsData> {
+export type AnalyticsQuery = {
+  range?: string;
+  from?: string;
+  to?: string;
+};
+
+function parseAnalyticsRange(query?: AnalyticsQuery): {
+  range: AnalyticsRange;
+  from: string | null;
+  to: string | null;
+  dateFilter: Record<string, unknown> | null;
+} {
+  const raw = query?.range;
+  const range: AnalyticsRange =
+    raw === "30" || raw === "all" || raw === "custom" || raw === "7" ? raw : "7";
+
+  const dateOk = (value?: string) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+
+  if (range === "all") {
+    return { range, from: null, to: null, dateFilter: null };
+  }
+
+  if (range === "custom" && dateOk(query?.from) && dateOk(query?.to)) {
+    const from = query!.from!;
+    const to = query!.to!;
+    return {
+      range,
+      from,
+      to,
+      dateFilter: { $gte: from <= to ? from : to, $lte: from <= to ? to : from },
+    };
+  }
+
+  const days = range === "30" ? 30 : 7;
+  // Inclusive window ending today: last N calendar dates.
+  const today = new Date();
+  const end = today.toISOString().slice(0, 10);
+  const startDate = new Date(`${end}T00:00:00Z`);
+  startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
+  const start = startDate.toISOString().slice(0, 10);
+  return {
+    range: range === "custom" ? "7" : range,
+    from: start,
+    to: end,
+    dateFilter: { $gte: start, $lte: end },
+  };
+}
+
+function daysBetween(fromIsoDate: string, toIsoDate: string): number {
+  const from = new Date(`${fromIsoDate}T00:00:00Z`).getTime();
+  const to = new Date(`${toIsoDate}T00:00:00Z`).getTime();
+  return Math.max(0, Math.round((to - from) / 86_400_000));
+}
+
+function buildHabitStats(
+  sprints: SprintDTO[],
+  categoryLabels: Map<string, string>,
+  todayDate: string,
+): HabitStat[] {
+  type Acc = {
+    habitId: string;
+    title: string;
+    category: string;
+    completedCount: number;
+    appearanceCount: number;
+    lastCompletedAt: string | null;
+    recurringDays: number[];
+  };
+
+  const byHabit = new Map<string, Acc>();
+
+  for (const sprint of sprints) {
+    for (const task of sprint.tasks) {
+      if (!task.habitId) continue; // one-offs / until-complete: not habit regularity
+
+      const existing = byHabit.get(task.habitId);
+      if (existing) {
+        existing.appearanceCount += 1;
+        if (task.completed) {
+          existing.completedCount += 1;
+          if (
+            task.completedAt &&
+            (!existing.lastCompletedAt || task.completedAt > existing.lastCompletedAt)
+          ) {
+            existing.lastCompletedAt = task.completedAt;
+          }
+        }
+        // Prefer the newest title (rename-safe display)
+        existing.title = task.title;
+        existing.category = task.category;
+        if (task.recurringDays?.length) existing.recurringDays = task.recurringDays;
+      } else {
+        byHabit.set(task.habitId, {
+          habitId: task.habitId,
+          title: task.title,
+          category: task.category,
+          completedCount: task.completed ? 1 : 0,
+          appearanceCount: 1,
+          lastCompletedAt: task.completed && task.completedAt ? task.completedAt : null,
+          recurringDays: task.recurringDays ?? [],
+        });
+      }
+    }
+  }
+
+  return Array.from(byHabit.values())
+    .map((habit) => {
+      const lastDoneDate = habit.lastCompletedAt
+        ? isoDate(habit.lastCompletedAt)
+        : null;
+      return {
+        habitId: habit.habitId,
+        title: habit.title,
+        category: habit.category,
+        categoryLabel: categoryLabels.get(habit.category) ?? habit.category,
+        completedCount: habit.completedCount,
+        appearanceCount: habit.appearanceCount,
+        hitRate: habit.appearanceCount
+          ? Math.round((habit.completedCount / habit.appearanceCount) * 100)
+          : 0,
+        lastCompletedAt: habit.lastCompletedAt,
+        daysSinceLastDone: lastDoneDate ? daysBetween(lastDoneDate, todayDate) : null,
+        recurringDays: habit.recurringDays,
+      };
+    })
+    .sort((a, b) => a.categoryLabel.localeCompare(b.categoryLabel) || a.title.localeCompare(b.title));
+}
+
+export async function getAnalytics(query?: AnalyticsQuery): Promise<AnalyticsData> {
   await connectDB();
+  await ensureRecurringHabitIds();
   const tz = await getServerTimeZone();
+  const todayDate = isoDate(undefined, tz);
+  const { range, from, to, dateFilter } = parseAnalyticsRange(
+    query?.range === "7" || query?.range === "30" || query?.range === "all" || query?.range === "custom"
+      ? query
+      : { ...query, range: "7" },
+  );
+
+  // Recompute from/to using server timezone for preset ranges so "today" matches the user.
+  let resolvedFrom = from;
+  let resolvedTo = to;
+  let resolvedFilter = dateFilter;
+  if (range === "7" || range === "30") {
+    const days = range === "30" ? 30 : 7;
+    resolvedTo = todayDate;
+    const startDate = new Date(`${todayDate}T00:00:00Z`);
+    startDate.setUTCDate(startDate.getUTCDate() - (days - 1));
+    resolvedFrom = startDate.toISOString().slice(0, 10);
+    resolvedFilter = { $gte: resolvedFrom, $lte: resolvedTo };
+  }
+
   const categories = await getCategories();
-  const docs = await Sprint.find({ date: { $ne: "braindump" } }).sort({ date: 1 }).limit(31).lean();
+  const sprintQuery: Record<string, unknown> = { date: { $ne: "braindump" } };
+  if (resolvedFilter) {
+    sprintQuery.date = { $ne: "braindump", ...resolvedFilter };
+  }
+
+  const docs = await Sprint.find(sprintQuery).sort({ date: 1 }).lean();
   const sprints = await serializeSprintsWithTasks(docs);
   const categoryLabels = new Map(categories.map((category) => [category.key, category.label]));
-  const categoryMap = new Map<Category, { completed: number; total: number }>(categories.map((category) => [category.key, { completed: 0, total: 0 }]));
+  const categoryMap = new Map<Category, { completed: number; total: number }>(
+    categories.map((category) => [category.key, { completed: 0, total: 0 }]),
+  );
 
   for (const sprint of sprints) {
     for (const task of sprint.tasks) {
@@ -335,12 +496,16 @@ export async function getAnalytics(): Promise<AnalyticsData> {
     : 0;
 
   return {
+    range,
+    from: resolvedFrom,
+    to: resolvedTo,
     daily: sprints.map((sprint) => ({ date: sprint.date.slice(5), productivity: sprint.productivity })),
     categories: Array.from(categoryMap.entries()).map(([category, values]) => ({
       category,
       label: categoryLabels.get(category) ?? category,
       ...values,
     })),
+    habits: buildHabitStats(sprints, categoryLabels, todayDate),
     averageProductivity,
     longestStreak: getStreak(sprints, tz),
     bestDay: completedDays.toSorted((a, b) => b.productivity - a.productivity)[0] ?? null,
@@ -397,17 +562,29 @@ export async function addTask(sprintId: string, input: unknown) {
   const data = taskInputSchema.parse(input);
   const order = data.order ?? (await Task.countDocuments({ sprintId, category: data.category }));
   
-  const taskData = { ...data };
+  const taskData: Record<string, unknown> = { ...data };
   if (data.untilComplete === true) {
     taskData.isRecurring = false;
     taskData.recurringDays = [];
     taskData.recurringStartDate = null;
     taskData.recurringEndDate = null;
+    taskData.habitId = null;
+  } else if (data.isRecurring === true) {
+    const sibling = await Task.findOne({
+      isRecurring: true,
+      category: data.category,
+      title: data.title,
+      habitId: { $exists: true, $nin: [null, ""] },
+    })
+      .select({ habitId: 1 })
+      .lean();
+    taskData.habitId = (sibling as { habitId?: string } | null)?.habitId || newHabitId();
   }
 
   await Task.create({ sprintId, ...taskData, order });
   await recalculateSprint(sprintId);
   revalidatePath(`/sprints/${sprintId}`);
+  revalidatePath("/analytics");
   return sprintWithTasks(sprintId);
 }
 
@@ -425,6 +602,18 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
     updates.recurringEndDate = null;
   } else if (rawUpdates.isRecurring === true) {
     updates.untilComplete = false;
+    const current = await Task.findOne({ _id: taskId, sprintId }).lean();
+    if (current && !(current as { habitId?: string | null }).habitId) {
+      const sibling = await Task.findOne({
+        isRecurring: true,
+        category: (rawUpdates.category as string) || current.category,
+        title: (rawUpdates.title as string) || current.title,
+        habitId: { $exists: true, $nin: [null, ""] },
+      })
+        .select({ habitId: 1 })
+        .lean();
+      updates.habitId = (sibling as { habitId?: string } | null)?.habitId || newHabitId();
+    }
   }
 
   if (updates.completed === true) {
@@ -447,6 +636,23 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
   }
 
   await Task.findOneAndUpdate({ _id: taskId, sprintId }, updates);
+
+  // Keep habit identity consistent across sprints when renaming or changing recurrence.
+  const saved = await Task.findById(taskId).lean();
+  const habitId = (saved as { habitId?: string | null } | null)?.habitId;
+  if (habitId) {
+    const sync: Record<string, unknown> = {};
+    if (rawUpdates.title !== undefined) sync.title = updates.title;
+    if (rawUpdates.category !== undefined) sync.category = updates.category;
+    if (rawUpdates.recurringDays !== undefined) sync.recurringDays = updates.recurringDays;
+    if (rawUpdates.recurringStartDate !== undefined) sync.recurringStartDate = updates.recurringStartDate;
+    if (rawUpdates.recurringEndDate !== undefined) sync.recurringEndDate = updates.recurringEndDate;
+    if (rawUpdates.isRecurring !== undefined) sync.isRecurring = updates.isRecurring;
+    if (Object.keys(sync).length > 0) {
+      await Task.updateMany({ habitId, _id: { $ne: taskId } }, { $set: sync });
+    }
+  }
+
   if (highlight !== undefined) {
     const sprint = await Sprint.findById(sprintId).lean<{ highlightTaskIds?: unknown; highlightTaskId?: unknown }>();
     const existing = normalizeHighlights(sprint);
@@ -455,6 +661,7 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
   }
   await recalculateSprint(sprintId);
   revalidatePath(`/sprints/${sprintId}`);
+  revalidatePath("/analytics");
   return sprintWithTasks(sprintId);
 }
 

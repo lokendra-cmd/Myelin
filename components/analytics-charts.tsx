@@ -58,16 +58,34 @@ export function AnalyticsCharts({ data }: { data: AnalyticsData }) {
         <div className="mt-4 h-64 sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              layout="vertical"
               data={data.categories.map((item) => ({
                 name: item.label,
                 percent: item.total ? Math.round((item.completed / item.total) * 100) : 0,
               }))}
+              margin={{ top: 4, right: 12, left: 4, bottom: 4 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} />
-              <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} />
-              <YAxis tickLine={false} axisLine={false} domain={[0, 100]} tick={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11 }}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={96}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10 }}
+                tickFormatter={(value: string) =>
+                  value.length > 14 ? `${value.slice(0, 13)}…` : value
+                }
+              />
               <Tooltip />
-              <Bar dataKey="percent" fill={ACCENT} radius={[8, 8, 0, 0]} />
+              <Bar dataKey="percent" fill={ACCENT} radius={[0, 8, 8, 0]} barSize={18} />
             </BarChart>
           </ResponsiveContainer>
         </div>
