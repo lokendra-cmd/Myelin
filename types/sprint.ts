@@ -38,6 +38,8 @@ export type TaskDTO = {
   recurringStartDate?: string | null;
   recurringEndDate?: string | null;
   untilComplete?: boolean;
+  /** Sticky highlight for recurring habits across sprints. */
+  highlighted?: boolean;
   deadlineAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;

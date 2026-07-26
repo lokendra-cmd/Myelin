@@ -211,6 +211,35 @@ export async function createSprint(date?: string) {
   const sprint = await Sprint.create({ date: targetDate, title, highlightTaskIds: [] });
   const dayOfWeek = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
 
+  // Roll-forward context from the previous sprint (highlights + until-complete tasks)
+  const previousSprint = await Sprint.findOne({
+    date: { $lt: targetDate, $ne: "braindump" },
+  })
+    .sort({ date: -1 })
+    .lean();
+
+  const highlightedHabitIds = new Set<string>();
+  for (const task of await Task.find({ isRecurring: true, highlighted: true })
+    .select({ habitId: 1 })
+    .lean()) {
+    const habitId = (task as { habitId?: string | null }).habitId;
+    if (habitId) highlightedHabitIds.add(habitId);
+  }
+
+  // Backfill: habits highlighted on the previous sprint but missing the sticky flag
+  if (previousSprint) {
+    const prevHighlightIds = normalizeHighlights(previousSprint);
+    if (prevHighlightIds.length) {
+      const prevHighlighted = await Task.find({ _id: { $in: prevHighlightIds } })
+        .select({ habitId: 1 })
+        .lean();
+      for (const task of prevHighlighted) {
+        const habitId = (task as { habitId?: string | null }).habitId;
+        if (habitId) highlightedHabitIds.add(habitId);
+      }
+    }
+  }
+
   // Fetch ALL recurring tasks but deduplicate by habitId (fallback: title+category) so that
   // copies-of-copies from previous sprints don't compound. Keep the first of each unique habit.
   const allRecurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
@@ -243,29 +272,39 @@ export async function createSprint(date?: string) {
     return task.recurringDays.includes(dayOfWeek);
   });
 
+  const carriedHighlightTaskIds: string[] = [];
+
   if (tasksToDuplicate.length) {
-    await Task.insertMany(
-      tasksToDuplicate.map((task, index) => ({
-        sprintId: sprint._id,
-        title: task.title,
-        category: task.category,
-        habitId: (task as { habitId?: string | null }).habitId || newHabitId(),
-        completed: false,
-        isRecurring: true,
-        recurringDays: task.recurringDays || [],
-        recurringStartDate: task.recurringStartDate || null,
-        recurringEndDate: task.recurringEndDate || null,
-        order: index,
-      })),
+    const created = await Task.insertMany(
+      tasksToDuplicate.map((task, index) => {
+        const habitId = (task as { habitId?: string | null }).habitId || newHabitId();
+        const highlighted =
+          Boolean((task as { highlighted?: boolean }).highlighted) || highlightedHabitIds.has(habitId);
+        return {
+          sprintId: sprint._id,
+          title: task.title,
+          category: task.category,
+          habitId,
+          completed: false,
+          isRecurring: true,
+          recurringDays: task.recurringDays || [],
+          recurringStartDate: task.recurringStartDate || null,
+          recurringEndDate: task.recurringEndDate || null,
+          highlighted,
+          order: index,
+        };
+      }),
     );
+    for (const task of created) {
+      if ((task as { highlighted?: boolean }).highlighted) {
+        carriedHighlightTaskIds.push(String(task._id));
+      }
+    }
   }
 
   // Roll forward active "Until Complete" tasks from the previous sprint
-  const previousSprint = await Sprint.findOne({
-    date: { $lt: targetDate, $ne: "braindump" }
-  }).sort({ date: -1 }).lean();
-
   if (previousSprint) {
+    const prevHighlightIds = new Set(normalizeHighlights(previousSprint));
     const activeUntilCompleteTasks = await Task.find({
       sprintId: previousSprint._id,
       untilComplete: true,
@@ -279,9 +318,20 @@ export async function createSprint(date?: string) {
         {
           sprintId: sprint._id,
           deadlineAt: eodUTC ? new Date(eodUTC) : null,
-        }
+        },
       );
+      for (const task of activeUntilCompleteTasks) {
+        if (prevHighlightIds.has(String(task._id))) {
+          carriedHighlightTaskIds.push(String(task._id));
+        }
+      }
     }
+  }
+
+  if (carriedHighlightTaskIds.length) {
+    await Sprint.findByIdAndUpdate(sprint._id, {
+      highlightTaskIds: Array.from(new Set(carriedHighlightTaskIds)),
+    });
   }
 
   await recalculateSprint(String(sprint._id));
@@ -658,6 +708,12 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
     const existing = normalizeHighlights(sprint);
     const highlightTaskIds = highlight ? Array.from(new Set([...existing, taskId])) : existing.filter((id) => id !== taskId);
     await Sprint.findByIdAndUpdate(sprintId, { highlightTaskIds });
+
+    // Sticky highlight for recurring habits — survives into future sprint copies
+    await Task.findByIdAndUpdate(taskId, { highlighted: highlight });
+    if (habitId && saved && (saved as { isRecurring?: boolean }).isRecurring) {
+      await Task.updateMany({ habitId }, { $set: { highlighted: highlight } });
+    }
   }
   await recalculateSprint(sprintId);
   revalidatePath(`/sprints/${sprintId}`);

@@ -13,6 +13,8 @@ const TaskSchema = new Schema(
     recurringStartDate: { type: Date, default: null },
     recurringEndDate: { type: Date, default: null },
     untilComplete: { type: Boolean, default: false },
+    /** Sticky highlight for recurring habits — carried into new sprint instances. */
+    highlighted: { type: Boolean, default: false },
     deadlineAt: { type: Date, default: null },
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
