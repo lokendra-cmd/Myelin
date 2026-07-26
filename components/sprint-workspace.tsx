@@ -1125,7 +1125,8 @@ function TaskItem({
           onDrop(category.key, task._id);
         }}
         className={cn(
-          "group relative flex min-w-0 flex-row items-center justify-between gap-4 overflow-hidden rounded-xl border p-4 shadow-sm transition hover:shadow-md",
+          "group relative flex min-w-0 flex-row items-center justify-between gap-4 rounded-xl border p-4 shadow-sm transition hover:shadow-md",
+          deleteMenuOpen ? "z-30 overflow-visible" : "overflow-hidden",
           isCompleted
             ? "border-emerald-100/50 bg-emerald-50/10 dark:border-emerald-950/20 dark:bg-emerald-950/5"
             : "border-zinc-200/80 bg-white/80 dark:border-zinc-800 dark:bg-zinc-950/70",
