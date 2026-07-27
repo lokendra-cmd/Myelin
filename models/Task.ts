@@ -28,6 +28,10 @@ const TaskSchema = new Schema(
       default: [],
     },
     order: { type: Number, default: 0 },
+    calories: { type: Number, default: null },
+    protein: { type: Number, default: null },
+    fat: { type: Number, default: null },
+    carbs: { type: Number, default: null },
   },
   { timestamps: true },
 );

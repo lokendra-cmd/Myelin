@@ -9,6 +9,7 @@ export type CategoryDTO = {
   themeId?: string;
   icon?: string;
   isBrainDump?: boolean;
+  isCaloriesTracker?: boolean;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -48,6 +49,10 @@ export type TaskDTO = {
     completedAt: string;
   }> | null;
   order: number;
+  calories?: number | null;
+  protein?: number | null;
+  fat?: number | null;
+  carbs?: number | null;
   createdAt: string;
   updatedAt: string;
 };

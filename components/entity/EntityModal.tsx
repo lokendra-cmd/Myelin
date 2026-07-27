@@ -43,6 +43,7 @@ export function EntityModal({
       tagline: "",
       icon: "",
       isBrainDump: false,
+      isCaloriesTracker: false,
     },
   });
 
@@ -64,6 +65,7 @@ export function EntityModal({
           tagline: "",
           icon: "",
           isBrainDump: false,
+          isCaloriesTracker: false,
         }
       );
       setTimeout(() => {

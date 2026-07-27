@@ -9,6 +9,7 @@ const CategorySchema = new Schema(
     themeId: { type: String, default: "" },
     icon: { type: String, default: "" },
     isBrainDump: { type: Boolean, default: false },
+    isCaloriesTracker: { type: Boolean, default: false },
     order: { type: Number, default: 0 },
   },
   { timestamps: true },

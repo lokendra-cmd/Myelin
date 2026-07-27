@@ -26,9 +26,12 @@ import { calculateProductivity } from "@/utils/productivity";
 import { ensureRecurringHabitIds, newHabitId } from "@/lib/habitId";
 
 async function recalculateSprint(sprintId: string) {
+  const calTrackerKeys = await CategoryModel.find({ isCaloriesTracker: true }).distinct("key");
+  const excludeMeals = calTrackerKeys.length > 0 ? { category: { $nin: calTrackerKeys } } : {};
+
   const [completedTasks, totalTasks] = await Promise.all([
-    Task.countDocuments({ sprintId, completed: true }),
-    Task.countDocuments({ sprintId }),
+    Task.countDocuments({ sprintId, completed: true, ...excludeMeals }),
+    Task.countDocuments({ sprintId, ...excludeMeals }),
   ]);
 
   const productivity = calculateProductivity(completedTasks, totalTasks);
@@ -101,7 +104,7 @@ export async function getRules(): Promise<RuleDTO[]> {
 
 export async function createCategory(input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId, isBrainDump } = categoryInputSchema.parse(input);
+  const { label, tagline, icon, themeId, isBrainDump, isCaloriesTracker } = categoryInputSchema.parse(input);
   const order = await CategoryModel.countDocuments();
   const category = await CategoryModel.create({
     key: await uniqueCategoryKey(label),
@@ -111,6 +114,7 @@ export async function createCategory(input: unknown) {
     icon: icon ?? "",
     themeId: themeId ?? "",
     isBrainDump: isBrainDump ?? false,
+    isCaloriesTracker: isCaloriesTracker ?? false,
     order,
   });
   revalidatePath("/");
@@ -119,10 +123,10 @@ export async function createCategory(input: unknown) {
 
 export async function updateCategory(key: string, input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId, isBrainDump } = categoryUpdateSchema.parse(input);
+  const { label, tagline, icon, themeId, isBrainDump, isCaloriesTracker } = categoryUpdateSchema.parse(input);
   const category = await CategoryModel.findOneAndUpdate(
     { key },
-    { label, tagline, icon, themeId, isBrainDump },
+    { label, tagline, icon, themeId, isBrainDump, isCaloriesTracker },
     { new: true }
   ).lean();
   if (!category) throw new Error("Category not found");

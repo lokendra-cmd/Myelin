@@ -8,6 +8,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
 import { TaskModal } from "@/components/tasks/TaskModal";
+import { MealModal } from "@/components/tasks/MealModal";
+import { MealItem } from "@/components/tasks/MealItem";
+import { NutritionSummary } from "@/components/nutrition-summary";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +36,7 @@ import {
   getUTCTimestamp
 } from "@/utils/date";
 import { productivityMood } from "@/utils/productivity";
+import { sumNutrition } from "@/lib/nutrition";
 
 type DeadlineDraft = {
   enabled: boolean;
@@ -272,6 +276,19 @@ export function SprintWorkspace({
     }, {} as Record<Category, TaskDTO[]>);
   }, [sprint.tasks, visibleCategories]);
 
+  const dailyNutritionTotals = useMemo(() => {
+    const mealTasks = sprint.tasks.filter((task) => {
+      const cat = categories.find((c) => c.key === task.category);
+      return cat?.isCaloriesTracker;
+    });
+    return sumNutrition(mealTasks);
+  }, [sprint.tasks, categories]);
+
+  const hasCaloriesTracker = useMemo(
+    () => categories.some((c) => c.isCaloriesTracker),
+    [categories],
+  );
+
   function onDrop(category: Category, targetId?: string) {
     if (!dragging) return;
     const moved = sprint.tasks.find((task) => task._id === dragging);
@@ -319,8 +336,18 @@ export function SprintWorkspace({
               {sprint.completedTasks} / {sprint.totalTasks}
             </span>
           </div>
+          {hasCaloriesTracker && dailyNutritionTotals.calories > 0 && (
+            <div className="mt-3 lg:mt-4">
+              <NutritionSummary totals={dailyNutritionTotals} variant="inline" className="justify-center lg:w-full" />
+            </div>
+          )}
         </div>
       </div>
+      {hasCaloriesTracker && (
+        <div className="mt-4">
+          <NutritionSummary totals={dailyNutritionTotals} variant="panel" />
+        </div>
+      )}
     </Card>
   );
 
@@ -557,6 +584,7 @@ export function SprintWorkspace({
                     tagline: editingCategory.tagline || "",
                     icon: editingCategory.icon || "",
                     isBrainDump: !!editingCategory.isBrainDump,
+                    isCaloriesTracker: !!editingCategory.isCaloriesTracker,
                   }
                 : null
             }
@@ -568,6 +596,7 @@ export function SprintWorkspace({
                   icon: values.icon,
                   themeId: editingCategory.themeId || hashTheme(values.label).id,
                   isBrainDump: !!values.isBrainDump,
+                  isCaloriesTracker: !!values.isCaloriesTracker,
                 };
                 const res = await fetch(`/api/categories/${encodeURIComponent(editingCategory.key)}`, {
                   method: "PATCH",
@@ -587,6 +616,7 @@ export function SprintWorkspace({
                           icon: updated.icon,
                           themeId: updated.themeId,
                           isBrainDump: updated.isBrainDump,
+                          isCaloriesTracker: updated.isCaloriesTracker,
                         }
                       : cat
                   )
@@ -599,6 +629,7 @@ export function SprintWorkspace({
                   icon: values.icon,
                   themeId: hashTheme(values.label).id,
                   isBrainDump: !!values.isBrainDump,
+                  isCaloriesTracker: !!values.isCaloriesTracker,
                 };
                 const res = await fetch("/api/categories", {
                   method: "POST",
@@ -678,34 +709,69 @@ export function SprintWorkspace({
             }}
           />
 
-          {/* Edit Task Modal */}
-          {editingTask && (
-            <TaskModal
-              mode="edit"
-              open={!!editingTask}
-              onOpenChange={(open) => { if (!open) setEditingTask(null); }}
-              task={editingTask}
-              onSaved={(taskId, updates) => {
-                updateTask(taskId, updates);
-                setEditingTask(null);
-              }}
-            />
-          )}
+          {/* Edit Task / Meal Modal */}
+          {editingTask && (() => {
+            const editCategory = categories.find((c) => c.key === editingTask.category);
+            if (editCategory?.isCaloriesTracker) {
+              return (
+                <MealModal
+                  mode="edit"
+                  open={!!editingTask}
+                  onOpenChange={(open) => { if (!open) setEditingTask(null); }}
+                  task={editingTask}
+                  onSaved={(taskId, updates) => {
+                    updateTask(taskId, updates);
+                    setEditingTask(null);
+                  }}
+                />
+              );
+            }
+            return (
+              <TaskModal
+                mode="edit"
+                open={!!editingTask}
+                onOpenChange={(open) => { if (!open) setEditingTask(null); }}
+                task={editingTask}
+                onSaved={(taskId, updates) => {
+                  updateTask(taskId, updates);
+                  setEditingTask(null);
+                }}
+              />
+            );
+          })()}
 
-          {/* Add Task Modal (per-category) */}
-          {addTaskCategory && (
-            <TaskModal
-              mode="create"
-              open={!!addTaskCategory}
-              onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
-              category={addTaskCategory}
-              sprintId={sprint._id}
-              onCreated={(updatedSprint) => {
-                setSprint(updatedSprint);
-                setAddTaskCategory(null);
-              }}
-            />
-          )}
+          {/* Add Task / Meal Modal (per-category) */}
+          {addTaskCategory && (() => {
+            const addCategory = categories.find((c) => c.key === addTaskCategory);
+            if (addCategory?.isCaloriesTracker) {
+              return (
+                <MealModal
+                  mode="create"
+                  open={!!addTaskCategory}
+                  onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
+                  category={addTaskCategory}
+                  sprintId={sprint._id}
+                  onCreated={(updatedSprint) => {
+                    setSprint(updatedSprint);
+                    setAddTaskCategory(null);
+                  }}
+                />
+              );
+            }
+            return (
+              <TaskModal
+                mode="create"
+                open={!!addTaskCategory}
+                onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
+                category={addTaskCategory}
+                sprintId={sprint._id}
+                onCreated={(updatedSprint) => {
+                  setSprint(updatedSprint);
+                  setAddTaskCategory(null);
+                }}
+              />
+            );
+          })()}
 
           <div className="min-w-0 space-y-3 sm:space-y-6">
             {visibleCategories.map((category, index) => (
@@ -1332,7 +1398,9 @@ function TaskSection(props: {
     ? getThemeById(props.category.themeId)
     : hashTheme(props.category._id);
   const hasIcon = Boolean(props.category.icon);
+  const isCaloriesTracker = Boolean(props.category.isCaloriesTracker);
   const pendingCount = props.tasks.filter((t) => !t.completed).length;
+  const nutritionTotals = sumNutrition(props.tasks);
 
   const [editingName, setEditingName] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
@@ -1381,15 +1449,20 @@ function TaskSection(props: {
                 ) : (
                   <h2 className={cn("truncate text-sm font-bold", theme.accentText)}>{props.category.label}</h2>
                 )}
-                {/* Pending badge */}
+                {/* Status badge */}
                 <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", theme.badge)}>
-                  {pendingCount} pending
+                  {isCaloriesTracker
+                    ? `${props.tasks.length} meal${props.tasks.length === 1 ? "" : "s"}`
+                    : `${pendingCount} pending`}
                 </span>
               </div>
               {props.category.tagline && (
                 <p className={cn("mt-0.5 hidden truncate text-[11px] italic opacity-75 sm:block", theme.accentText)}>
                   &quot;{props.category.tagline}&quot;
                 </p>
+              )}
+              {isCaloriesTracker && collapsed && (
+                <NutritionSummary totals={nutritionTotals} variant="banner" accentText={theme.accentText} />
               )}
             </div>
           </div>
@@ -1429,34 +1502,53 @@ function TaskSection(props: {
             style={{ overflow: "hidden" }}
           >
             <div className="p-3 sm:p-4">
+              {isCaloriesTracker && (
+                <div className="mb-3">
+                  <NutritionSummary totals={nutritionTotals} variant="panel" />
+                </div>
+              )}
               <div className="min-w-0 space-y-2.5">
-                {props.tasks.map((task) => (
-                  <TaskItem
-                    key={task._id}
-                    task={task}
-                    category={props.category}
-                    highlightTaskIds={props.highlightTaskIds}
-                    onUpdate={props.onUpdate}
-                    onDelete={props.onDelete}
-                    onEdit={props.onEdit}
-                    onDrag={props.onDrag}
-                    onDrop={props.onDrop}
-                    debouncedTaskTitle={props.debouncedTaskTitle}
-                    dragging={props.dragging}
-                    onConfigureRecurring={props.onConfigureRecurring}
-                    timeZone={props.timeZone}
-                  />
-                ))}
+                {props.tasks.map((task) =>
+                  isCaloriesTracker ? (
+                    <MealItem
+                      key={task._id}
+                      task={task}
+                      onEdit={props.onEdit}
+                      onDelete={props.onDelete}
+                    />
+                  ) : (
+                    <TaskItem
+                      key={task._id}
+                      task={task}
+                      category={props.category}
+                      highlightTaskIds={props.highlightTaskIds}
+                      onUpdate={props.onUpdate}
+                      onDelete={props.onDelete}
+                      onEdit={props.onEdit}
+                      onDrag={props.onDrag}
+                      onDrop={props.onDrop}
+                      debouncedTaskTitle={props.debouncedTaskTitle}
+                      dragging={props.dragging}
+                      onConfigureRecurring={props.onConfigureRecurring}
+                      timeZone={props.timeZone}
+                    />
+                  ),
+                )}
               </div>
               <motion.button
                 type="button"
                 onClick={props.onAddTask}
                 whileHover={{ scale: 1.005 }}
                 whileTap={{ scale: 0.995 }}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:border-violet-400 hover:text-violet-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-violet-600 dark:hover:text-violet-400 sm:px-4 sm:py-3"
+                className={cn(
+                  "mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm font-medium transition-colors sm:px-4 sm:py-3",
+                  isCaloriesTracker
+                    ? "border-orange-200 text-orange-600 hover:border-orange-400 hover:bg-orange-50/50 dark:border-orange-900/50 dark:text-orange-400 dark:hover:border-orange-700 dark:hover:bg-orange-950/20"
+                    : "border-zinc-300 text-zinc-500 hover:border-violet-400 hover:text-violet-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-violet-600 dark:hover:text-violet-400",
+                )}
               >
                 <Plus className="size-4" />
-                Add Task
+                {isCaloriesTracker ? "Add Meal" : "Add Task"}
               </motion.button>
             </div>
           </motion.div>

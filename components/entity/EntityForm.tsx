@@ -2,7 +2,7 @@
 
 import { Controller, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
-import { Tag, PenLine, Smile, AlertCircle, Brain } from "lucide-react";
+import { Tag, PenLine, Smile, AlertCircle, Brain, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IconPicker } from "./IconPicker";
 import { ModalFooter } from "./ModalFooter";
@@ -16,6 +16,7 @@ export const categorySchema = z.object({
   tagline: z.string().max(80, "Max 80 characters").optional(),
   icon: z.string().min(1, "Please select an icon"),
   isBrainDump: z.boolean().optional(),
+  isCaloriesTracker: z.boolean().optional(),
 });
 
 export const ruleSchema = z.object({
@@ -33,6 +34,7 @@ export type EntityFormValues = {
   tagline?: string;
   icon?: string;
   isBrainDump?: boolean;
+  isCaloriesTracker?: boolean;
 };
 
 interface EntityFormProps {
@@ -196,6 +198,30 @@ export function EntityForm({
             </label>
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
               Tasks in this category will belong to the global Brain Dump workspace instead of today&apos;s sprint.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Calories Tracker Toggle (only for Categories) */}
+      {entityType === "category" && (
+        <div className="flex items-start gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <input
+            type="checkbox"
+            id="isCaloriesTracker"
+            {...register("isCaloriesTracker")}
+            className="mt-1 size-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500 dark:border-zinc-700 dark:bg-zinc-900 cursor-pointer"
+          />
+          <div className="space-y-1">
+            <label
+              htmlFor="isCaloriesTracker"
+              className="flex items-center gap-1.5 text-sm font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer"
+            >
+              <Flame className="size-4 text-orange-500" />
+              Calories Tracker
+            </label>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Enable this to track calories for tasks in this category.
             </p>
           </div>
         </div>

@@ -31,6 +31,10 @@ export function serializeTask(task: LeanTask): TaskDTO {
         })
       : [],
     order: Number(task.order ?? 0),
+    calories: task.calories != null ? Number(task.calories) : null,
+    protein: task.protein != null ? Number(task.protein) : null,
+    fat: task.fat != null ? Number(task.fat) : null,
+    carbs: task.carbs != null ? Number(task.carbs) : null,
     createdAt: new Date(task.createdAt as string | Date).toISOString(),
     updatedAt: new Date(task.updatedAt as string | Date).toISOString(),
   };
@@ -46,6 +50,7 @@ export function serializeCategory(category: LeanCategory): CategoryDTO {
     themeId: category.themeId ? String(category.themeId) : undefined,
     icon: category.icon ? String(category.icon) : undefined,
     isBrainDump: Boolean(category.isBrainDump),
+    isCaloriesTracker: Boolean(category.isCaloriesTracker),
     order: Number(category.order ?? 0),
     createdAt: new Date(category.createdAt as string | Date).toISOString(),
     updatedAt: new Date(category.updatedAt as string | Date).toISOString(),
