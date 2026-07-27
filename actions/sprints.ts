@@ -104,8 +104,20 @@ export async function getRules(): Promise<RuleDTO[]> {
 
 export async function createCategory(input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId, isBrainDump, isCaloriesTracker } = categoryInputSchema.parse(input);
+  const {
+    label,
+    tagline,
+    icon,
+    themeId,
+    isBrainDump,
+    isCaloriesTracker,
+    targetCalories,
+    targetProtein,
+    targetFat,
+    targetCarbs,
+  } = categoryInputSchema.parse(input);
   const order = await CategoryModel.countDocuments();
+  const useTargets = Boolean(isCaloriesTracker);
   const category = await CategoryModel.create({
     key: await uniqueCategoryKey(label),
     label,
@@ -115,6 +127,10 @@ export async function createCategory(input: unknown) {
     themeId: themeId ?? "",
     isBrainDump: isBrainDump ?? false,
     isCaloriesTracker: isCaloriesTracker ?? false,
+    targetCalories: useTargets ? (targetCalories ?? null) : null,
+    targetProtein: useTargets ? (targetProtein ?? null) : null,
+    targetFat: useTargets ? (targetFat ?? null) : null,
+    targetCarbs: useTargets ? (targetCarbs ?? null) : null,
     order,
   });
   revalidatePath("/");
@@ -123,10 +139,33 @@ export async function createCategory(input: unknown) {
 
 export async function updateCategory(key: string, input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId, isBrainDump, isCaloriesTracker } = categoryUpdateSchema.parse(input);
+  const {
+    label,
+    tagline,
+    icon,
+    themeId,
+    isBrainDump,
+    isCaloriesTracker,
+    targetCalories,
+    targetProtein,
+    targetFat,
+    targetCarbs,
+  } = categoryUpdateSchema.parse(input);
+  const useTargets = Boolean(isCaloriesTracker);
   const category = await CategoryModel.findOneAndUpdate(
     { key },
-    { label, tagline, icon, themeId, isBrainDump, isCaloriesTracker },
+    {
+      label,
+      tagline,
+      icon,
+      themeId,
+      isBrainDump,
+      isCaloriesTracker,
+      targetCalories: useTargets ? (targetCalories ?? null) : null,
+      targetProtein: useTargets ? (targetProtein ?? null) : null,
+      targetFat: useTargets ? (targetFat ?? null) : null,
+      targetCarbs: useTargets ? (targetCarbs ?? null) : null,
+    },
     { new: true }
   ).lean();
   if (!category) throw new Error("Category not found");
@@ -531,12 +570,73 @@ export async function getAnalytics(query?: AnalyticsQuery): Promise<AnalyticsDat
   const docs = await Sprint.find(sprintQuery).sort({ date: 1 }).lean();
   const sprints = await serializeSprintsWithTasks(docs);
   const categoryLabels = new Map(categories.map((category) => [category.key, category.label]));
+  const calorieCategories = categories.filter((category) => category.isCaloriesTracker);
+  const calorieCategoryKeys = new Set(calorieCategories.map((category) => category.key));
   const categoryMap = new Map<Category, { completed: number; total: number }>(
-    categories.map((category) => [category.key, { completed: 0, total: 0 }]),
+    categories
+      .filter((category) => !category.isCaloriesTracker)
+      .map((category) => [category.key, { completed: 0, total: 0 }]),
   );
+  const calorieTrackerMap = new Map<
+    Category,
+    {
+      label: string;
+      mealCount: number;
+      totals: { calories: number; protein: number; fat: number; carbs: number };
+      targets: { calories: number; protein: number; fat: number; carbs: number };
+      daily: Array<{
+        date: string;
+        achieved: { calories: number; protein: number; fat: number; carbs: number };
+        target: { calories: number; protein: number; fat: number; carbs: number };
+      }>;
+    }
+  >(
+    calorieCategories.map((category) => [
+      category.key,
+      {
+        label: category.label,
+        mealCount: 0,
+        totals: { calories: 0, protein: 0, fat: 0, carbs: 0 },
+        targets: {
+          calories: category.targetCalories ?? 0,
+          protein: category.targetProtein ?? 0,
+          fat: category.targetFat ?? 0,
+          carbs: category.targetCarbs ?? 0,
+        },
+        daily: sprints.map((sprint) => ({
+          date: sprint.date.slice(5),
+          achieved: { calories: 0, protein: 0, fat: 0, carbs: 0 },
+          target: {
+            calories: category.targetCalories ?? 0,
+            protein: category.targetProtein ?? 0,
+            fat: category.targetFat ?? 0,
+            carbs: category.targetCarbs ?? 0,
+          },
+        })),
+      },
+    ]),
+  );
+  const dailyTargetCalories = calorieCategories.reduce((sum, category) => sum + (category.targetCalories ?? 0), 0);
+  const dailyCalories = sprints.map((sprint) => ({ date: sprint.date.slice(5), calories: 0, target: dailyTargetCalories }));
 
-  for (const sprint of sprints) {
+  for (const [sprintIndex, sprint] of sprints.entries()) {
     for (const task of sprint.tasks) {
+      if (calorieCategoryKeys.has(task.category)) {
+        const tracker = calorieTrackerMap.get(task.category);
+        if (tracker) {
+          tracker.mealCount += 1;
+          tracker.totals.calories += task.calories ?? 0;
+          tracker.totals.protein += task.protein ?? 0;
+          tracker.totals.fat += task.fat ?? 0;
+          tracker.totals.carbs += task.carbs ?? 0;
+          tracker.daily[sprintIndex].achieved.calories += task.calories ?? 0;
+          tracker.daily[sprintIndex].achieved.protein += task.protein ?? 0;
+          tracker.daily[sprintIndex].achieved.fat += task.fat ?? 0;
+          tracker.daily[sprintIndex].achieved.carbs += task.carbs ?? 0;
+        }
+        dailyCalories[sprintIndex].calories += task.calories ?? 0;
+        continue;
+      }
       if (!categoryMap.has(task.category)) categoryMap.set(task.category, { completed: 0, total: 0 });
       const bucket = categoryMap.get(task.category)!;
       bucket.total += 1;
@@ -559,6 +659,10 @@ export async function getAnalytics(query?: AnalyticsQuery): Promise<AnalyticsDat
       label: categoryLabels.get(category) ?? category,
       ...values,
     })),
+    calorieTrackers: Array.from(calorieTrackerMap.entries())
+      .map(([category, values]) => ({ category, ...values }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    dailyCalories,
     habits: buildHabitStats(sprints, categoryLabels, todayDate),
     averageProductivity,
     longestStreak: getStreak(sprints, tz),

@@ -54,6 +54,10 @@ export const categoryInputSchema = z.object({
   themeId: z.string().max(50).optional(),
   isBrainDump: z.boolean().optional(),
   isCaloriesTracker: z.boolean().optional(),
+  targetCalories: z.number().min(0).max(10000).nullable().optional(),
+  targetProtein: z.number().min(0).max(1000).nullable().optional(),
+  targetFat: z.number().min(0).max(1000).nullable().optional(),
+  targetCarbs: z.number().min(0).max(1000).nullable().optional(),
 });
 
 export const categoryUpdateSchema = z.object({
@@ -63,6 +67,10 @@ export const categoryUpdateSchema = z.object({
   themeId: z.string().max(50).optional(),
   isBrainDump: z.boolean().optional(),
   isCaloriesTracker: z.boolean().optional(),
+  targetCalories: z.number().min(0).max(10000).nullable().optional(),
+  targetProtein: z.number().min(0).max(1000).nullable().optional(),
+  targetFat: z.number().min(0).max(1000).nullable().optional(),
+  targetCarbs: z.number().min(0).max(1000).nullable().optional(),
 });
 
 export const ruleInputSchema = z.object({

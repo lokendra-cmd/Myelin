@@ -585,10 +585,15 @@ export function SprintWorkspace({
                     icon: editingCategory.icon || "",
                     isBrainDump: !!editingCategory.isBrainDump,
                     isCaloriesTracker: !!editingCategory.isCaloriesTracker,
+                    targetCalories: editingCategory.targetCalories ?? undefined,
+                    targetProtein: editingCategory.targetProtein ?? undefined,
+                    targetFat: editingCategory.targetFat ?? undefined,
+                    targetCarbs: editingCategory.targetCarbs ?? undefined,
                   }
                 : null
             }
             onSubmit={async (values) => {
+              const useTargets = !!values.isCaloriesTracker;
               if (editingCategory) {
                 const body = {
                   label: values.label,
@@ -597,6 +602,10 @@ export function SprintWorkspace({
                   themeId: editingCategory.themeId || hashTheme(values.label).id,
                   isBrainDump: !!values.isBrainDump,
                   isCaloriesTracker: !!values.isCaloriesTracker,
+                  targetCalories: useTargets ? (values.targetCalories ?? null) : null,
+                  targetProtein: useTargets ? (values.targetProtein ?? null) : null,
+                  targetFat: useTargets ? (values.targetFat ?? null) : null,
+                  targetCarbs: useTargets ? (values.targetCarbs ?? null) : null,
                 };
                 const res = await fetch(`/api/categories/${encodeURIComponent(editingCategory.key)}`, {
                   method: "PATCH",
@@ -617,6 +626,10 @@ export function SprintWorkspace({
                           themeId: updated.themeId,
                           isBrainDump: updated.isBrainDump,
                           isCaloriesTracker: updated.isCaloriesTracker,
+                          targetCalories: updated.targetCalories,
+                          targetProtein: updated.targetProtein,
+                          targetFat: updated.targetFat,
+                          targetCarbs: updated.targetCarbs,
                         }
                       : cat
                   )
@@ -630,6 +643,10 @@ export function SprintWorkspace({
                   themeId: hashTheme(values.label).id,
                   isBrainDump: !!values.isBrainDump,
                   isCaloriesTracker: !!values.isCaloriesTracker,
+                  targetCalories: useTargets ? (values.targetCalories ?? null) : null,
+                  targetProtein: useTargets ? (values.targetProtein ?? null) : null,
+                  targetFat: useTargets ? (values.targetFat ?? null) : null,
+                  targetCarbs: useTargets ? (values.targetCarbs ?? null) : null,
                 };
                 const res = await fetch("/api/categories", {
                   method: "POST",
@@ -1072,7 +1089,10 @@ function TaskItem({
       {!isDesktop && isFeaturedMobile && (
         <motion.div
           layout
-          className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+          className={cn(
+            "relative min-w-0 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950",
+            menuOpen ? "z-30 overflow-visible" : "overflow-hidden",
+          )}
         >
           <div className="flex min-w-0 items-start gap-3">
             {statusIcon}
@@ -1135,7 +1155,8 @@ function TaskItem({
         <motion.div
           layout
           className={cn(
-            "min-w-0 overflow-hidden rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-zinc-950",
+            "relative min-w-0 rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-zinc-950",
+            menuOpen ? "z-30 overflow-visible" : "overflow-hidden",
             isCompleted
               ? "border-emerald-100/70 dark:border-emerald-950/30"
               : "border-zinc-200/90 dark:border-zinc-800",
@@ -1192,7 +1213,7 @@ function TaskItem({
         }}
         className={cn(
           "group relative flex min-w-0 flex-row items-center justify-between gap-4 rounded-xl border p-4 shadow-sm transition hover:shadow-md",
-          deleteMenuOpen ? "z-30 overflow-visible" : "overflow-hidden",
+          deleteMenuOpen || menuOpen ? "z-30 overflow-visible" : "overflow-hidden",
           isCompleted
             ? "border-emerald-100/50 bg-emerald-50/10 dark:border-emerald-950/20 dark:bg-emerald-950/5"
             : "border-zinc-200/80 bg-white/80 dark:border-zinc-800 dark:bg-zinc-950/70",
@@ -1462,7 +1483,17 @@ function TaskSection(props: {
                 </p>
               )}
               {isCaloriesTracker && collapsed && (
-                <NutritionSummary totals={nutritionTotals} variant="banner" accentText={theme.accentText} />
+                <NutritionSummary
+                  totals={nutritionTotals}
+                  targets={{
+                    calories: props.category.targetCalories ?? 0,
+                    protein: props.category.targetProtein ?? 0,
+                    fat: props.category.targetFat ?? 0,
+                    carbs: props.category.targetCarbs ?? 0,
+                  }}
+                  variant="banner"
+                  accentText={theme.accentText}
+                />
               )}
             </div>
           </div>

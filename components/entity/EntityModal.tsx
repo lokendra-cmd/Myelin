@@ -44,6 +44,10 @@ export function EntityModal({
       icon: "",
       isBrainDump: false,
       isCaloriesTracker: false,
+      targetCalories: undefined,
+      targetProtein: undefined,
+      targetFat: undefined,
+      targetCarbs: undefined,
     },
   });
 
@@ -66,6 +70,10 @@ export function EntityModal({
           icon: "",
           isBrainDump: false,
           isCaloriesTracker: false,
+          targetCalories: undefined,
+          targetProtein: undefined,
+          targetFat: undefined,
+          targetCarbs: undefined,
         }
       );
       setTimeout(() => {
@@ -100,7 +108,7 @@ export function EntityModal({
               <Dialog.Content asChild onOpenAutoFocus={handleOpenAutoFocus}>
                 <motion.div
                   key="content"
-                  className="fixed left-1/2 top-1/2 z-50 w-[min(95vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-black/10 dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden"
+                  className="fixed left-1/2 top-1/2 z-50 w-[min(95vw,520px)] max-h-[92vh] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-black/10 dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden"
                   initial={{ opacity: 0, scale: 0.94, y: 12 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -123,15 +131,17 @@ export function EntityModal({
                   />
 
                   {/* Form */}
-                  <EntityForm
-                    entityType={entityType}
-                    onSubmit={onSubmit}
-                    form={form}
-                    accentBg={previewTheme.accentBg}
-                    accentText={previewTheme.accentText}
-                    nameInputRef={nameInputRef}
-                    submitLabel={submitLabel}
-                  />
+                  <div className="max-h-[calc(92vh-140px)] overflow-y-auto overscroll-contain">
+                    <EntityForm
+                      entityType={entityType}
+                      onSubmit={onSubmit}
+                      form={form}
+                      accentBg={previewTheme.accentBg}
+                      accentText={previewTheme.accentText}
+                      nameInputRef={nameInputRef}
+                      submitLabel={submitLabel}
+                    />
+                  </div>
                 </motion.div>
               </Dialog.Content>
             </>

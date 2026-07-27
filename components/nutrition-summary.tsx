@@ -6,6 +6,7 @@ import { formatKcal, hasMacroData, macroCalories, type NutritionTotals } from "@
 
 type NutritionSummaryProps = {
   totals: NutritionTotals;
+  targets?: Partial<NutritionTotals> | null;
   variant?: "banner" | "panel" | "inline";
   className?: string;
   accentText?: string;
@@ -20,9 +21,25 @@ function MacroPill({ label, value, className }: { label: string; value: number; 
   );
 }
 
-export function NutritionSummary({ totals, variant = "inline", className, accentText }: NutritionSummaryProps) {
+function ProgressValue({ current, target, unit }: { current: number; target?: number | null; unit?: string }) {
+  if (!target || target <= 0) return null;
+  return (
+    <span className="tabular-nums">
+      {Math.round(current)}/{Math.round(target)}
+      {unit ? ` ${unit}` : ""}
+    </span>
+  );
+}
+
+export function NutritionSummary({ totals, targets, variant = "inline", className, accentText }: NutritionSummaryProps) {
   const macroKcal = macroCalories(totals);
   const showMacros = hasMacroData(totals);
+  const hasTargets = Boolean(
+    (targets?.calories ?? 0) > 0 ||
+    (targets?.protein ?? 0) > 0 ||
+    (targets?.fat ?? 0) > 0 ||
+    (targets?.carbs ?? 0) > 0,
+  );
 
   if (totals.calories <= 0 && !showMacros) {
     if (variant === "banner") {
@@ -40,13 +57,27 @@ export function NutritionSummary({ totals, variant = "inline", className, accent
       <div className={cn("mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1", className)}>
         <span className={cn("inline-flex items-center gap-1 text-xs font-semibold tabular-nums", accentText)}>
           <Flame className="size-3 opacity-80" />
-          {formatKcal(totals.calories)} kcal
+          {hasTargets && (targets?.calories ?? 0) > 0
+            ? <ProgressValue current={totals.calories} target={targets?.calories} unit="kcal" />
+            : `${formatKcal(totals.calories)} kcal`}
         </span>
-        {showMacros && (
+        {(showMacros || hasTargets) && (
           <span className={cn("flex flex-wrap items-center gap-x-2.5 text-[11px] opacity-75", accentText)}>
-            <MacroPill label="P" value={totals.protein} />
-            <MacroPill label="F" value={totals.fat} />
-            <MacroPill label="C" value={totals.carbs} />
+            {(targets?.protein ?? 0) > 0 ? (
+              <ProgressValue current={totals.protein} target={targets?.protein} unit="P" />
+            ) : (
+              <MacroPill label="P" value={totals.protein} />
+            )}
+            {(targets?.fat ?? 0) > 0 ? (
+              <ProgressValue current={totals.fat} target={targets?.fat} unit="F" />
+            ) : (
+              <MacroPill label="F" value={totals.fat} />
+            )}
+            {(targets?.carbs ?? 0) > 0 ? (
+              <ProgressValue current={totals.carbs} target={targets?.carbs} unit="C" />
+            ) : (
+              <MacroPill label="C" value={totals.carbs} />
+            )}
           </span>
         )}
       </div>
