@@ -34,7 +34,16 @@ export type TaskDTO = {
   _id: string;
   sprintId: string;
   title: string;
+  description?: string;
+  /** @deprecated Prefer structured TaskPlan. Kept for migration/compat. */
+  plan?: string;
   category: Category;
+  estimatedTimeMinutes?: number | null;
+  favorite?: boolean;
+  coverImage?: string | null;
+  /** Denormalized — list UI can highlight Plan without loading steps. */
+  planStepCount?: number;
+  planCompletedStepCount?: number;
   /** Stable identity for recurring habits. Null for one-off tasks. */
   habitId?: string | null;
   completed: boolean;
@@ -154,4 +163,3 @@ export type BrainDumpThoughtDTO = {
   createdAt: string;
   updatedAt: string;
 };
-
