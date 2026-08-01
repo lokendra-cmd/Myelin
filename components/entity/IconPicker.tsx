@@ -269,9 +269,9 @@ export function IconPicker({
               onClick={() => onChange(name)}
               onMouseEnter={() => setFocusIndex(idx)}
               className={cn(
-                "flex aspect-square items-center justify-center rounded-lg border transition-all",
+                "grid aspect-square w-full place-items-center rounded-lg border p-0 transition-colors",
                 isSelected
-                  ? `${accentBg} ${accentText} border-current/30 ring-2 ring-current/20 scale-105`
+                  ? `${accentBg} ${accentText} border-current/30 ring-2 ring-current/20`
                   : isFocused
                     ? "border-zinc-300 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                     : "border-transparent text-zinc-500 hover:border-zinc-200 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:border-zinc-800 dark:hover:bg-zinc-900",
@@ -281,7 +281,7 @@ export function IconPicker({
               role="option"
               tabIndex={-1}
             >
-              <Icon className="size-4" aria-hidden />
+              <Icon className="size-4 shrink-0" aria-hidden strokeWidth={1.75} />
             </button>
           );
         })}

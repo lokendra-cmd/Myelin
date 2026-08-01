@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, List, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
 import { TaskModal } from "@/components/tasks/TaskModal";
 import { MealModal } from "@/components/tasks/MealModal";
@@ -87,8 +87,11 @@ export function SprintWorkspace({
   const [addTaskCategory, setAddTaskCategory] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const firstInput = useRef<HTMLInputElement | null>(null);
+  const categoryDragKeysRef = useRef<string[] | null>(null);
+  const draggingCategoryRef = useRef<string | null>(null);
   const highlightTasks = sprint.tasks.filter((task) => sprint.highlightTaskIds.includes(task._id));
   const mood = productivityMood(sprint.productivity);
 
@@ -308,6 +311,54 @@ export function SprintWorkspace({
     startTransition(() => {
       void mutate(`/api/sprints/${sprint._id}`, { method: "PUT", body: JSON.stringify({ taskIds }) });
       if (moved.category !== category) updateTask(moved._id, { category });
+    });
+  }
+
+  function onCategoryDragStart(key: string) {
+    setDragging(null);
+    draggingCategoryRef.current = key;
+    setDraggingCategory(key);
+    categoryDragKeysRef.current = null;
+  }
+
+  function onCategoryDragOver(overKey: string) {
+    const activeKey = draggingCategoryRef.current;
+    if (!activeKey || activeKey === overKey) return;
+    setCategories((current) => {
+      const sortable = current.filter((c) => !c.isBrainDump);
+      const from = sortable.findIndex((c) => c.key === activeKey);
+      const to = sortable.findIndex((c) => c.key === overKey);
+      if (from < 0 || to < 0 || from === to) return current;
+      const next = [...sortable];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      const orderMap = new Map(next.map((c, i) => [c.key, i]));
+      categoryDragKeysRef.current = next.map((c) => c.key);
+      return current.map((c) => (orderMap.has(c.key) ? { ...c, order: orderMap.get(c.key)! } : c));
+    });
+  }
+
+  function onCategoryDragEnd() {
+    const keys = categoryDragKeysRef.current;
+    draggingCategoryRef.current = null;
+    setDraggingCategory(null);
+    categoryDragKeysRef.current = null;
+    if (!keys?.length) return;
+    startTransition(() => {
+      void (async () => {
+        try {
+          const res = await fetch("/api/categories", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ categoryKeys: keys }),
+          });
+          if (!res.ok) return;
+          const updated = (await res.json()) as CategoryDTO[];
+          setCategories(updated);
+        } catch {
+          // Keep optimistic order; next refresh will reconcile.
+        }
+      })();
     });
   }
 
@@ -800,6 +851,8 @@ export function SprintWorkspace({
                 draft={draft[category.key] ?? ""}
                 deadlineDraft={deadlineDraft[category.key] ?? defaultDeadlineDraft(category.key, timeZone)}
                 dragging={dragging}
+                draggingCategory={draggingCategory}
+                canReorderCategory={categories.some((c) => c.key === category.key && !c.isBrainDump)}
                 onDraft={(value) => setDraft((current) => ({ ...current, [category.key]: value }))}
                 onDeadlineDraft={(value) => setDeadlineDraft((current) => ({ ...current, [category.key]: value }))}
                 onAdd={() => add(category.key)}
@@ -812,6 +865,9 @@ export function SprintWorkspace({
                 onEdit={setEditingTask}
                 onDrag={setDragging}
                 onDrop={onDrop}
+                onCategoryDragStart={onCategoryDragStart}
+                onCategoryDragOver={onCategoryDragOver}
+                onCategoryDragEnd={onCategoryDragEnd}
                 highlightTaskIds={sprint.highlightTaskIds}
                 pending={isPending}
                 activeMenuId={activeMenuId}
@@ -877,6 +933,7 @@ function TaskItem({
   const [confirmMode, setConfirmMode] = useState<"none" | "start-again" | "delete">("none");
   const menuRef = useRef<HTMLDivElement>(null);
   const deleteMenuRef = useRef<HTMLDivElement>(null);
+  const hasPlan = Boolean(task.planStepCount) || Boolean(task.plan?.trim());
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -1008,6 +1065,14 @@ function TaskItem({
             <div className="py-1">
               {!isCompleted && (
                 <>
+                  <Link
+                    href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
+                  >
+                    <List className="size-3.5" />
+                    Open Plan
+                  </Link>
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -1032,6 +1097,14 @@ function TaskItem({
               )}
               {isCompleted && (
                 <>
+                  <Link
+                    href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
+                  >
+                    <List className="size-3.5" />
+                    Open Plan
+                  </Link>
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -1220,7 +1293,7 @@ function TaskItem({
           dragging === task._id && "opacity-40",
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <div className="cursor-grab text-zinc-300 hover:text-zinc-500 dark:text-zinc-700 shrink-0">
             <GripVertical className="size-4" />
           </div>
@@ -1319,6 +1392,20 @@ function TaskItem({
                   </div>
                 )}
               </div>
+              <Link
+                href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                title="Plan"
+                className={cn(
+                  "ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition",
+                  hasPlan
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60"
+                    : "border-emerald-100/80 bg-emerald-50/60 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40",
+                )}
+              >
+                <List className="size-3.5 stroke-[2]" />
+                Plan
+              </Link>
+              {moreMenu}
             </div>
           ) : (
             moreMenu
@@ -1394,6 +1481,8 @@ function TaskSection(props: {
   deadlineDraft: DeadlineDraft;
   firstInput?: RefObject<HTMLInputElement | null>;
   dragging: string | null;
+  draggingCategory: string | null;
+  canReorderCategory: boolean;
   highlightTaskIds: string[];
   pending: boolean;
   activeMenuId: string | null;
@@ -1410,6 +1499,9 @@ function TaskSection(props: {
   onEdit: (task: TaskDTO) => void;
   onDrag: (taskId: string | null) => void;
   onDrop: (category: Category, targetId?: string) => void;
+  onCategoryDragStart: (key: string) => void;
+  onCategoryDragOver: (key: string) => void;
+  onCategoryDragEnd: () => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
   onConfigureRecurring: (task: TaskDTO) => void;
   timeZone: string;
@@ -1422,12 +1514,29 @@ function TaskSection(props: {
   const isCaloriesTracker = Boolean(props.category.isCaloriesTracker);
   const pendingCount = props.tasks.filter((t) => !t.completed).length;
   const nutritionTotals = sumNutrition(props.tasks);
+  const isCategoryDragging = props.draggingCategory === props.category.key;
 
   const [editingName, setEditingName] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <Card className={cn("min-w-0 overflow-hidden rounded-2xl ring-1", theme.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
+    <motion.div layout transition={{ type: "spring", stiffness: 380, damping: 34, mass: 0.8 }}>
+    <Card
+      className={cn(
+        "min-w-0 overflow-hidden rounded-2xl ring-1 transition",
+        theme.ring,
+        isCategoryDragging && "opacity-45 ring-2 ring-emerald-400/50",
+        props.draggingCategory && !isCategoryDragging && "ring-emerald-300/30",
+      )}
+      onDragOver={(event) => {
+        event.preventDefault();
+        if (props.draggingCategory) props.onCategoryDragOver(props.category.key);
+      }}
+      onDrop={() => {
+        if (props.draggingCategory) return;
+        props.onDrop(props.category.key);
+      }}
+    >
       {/* ── Themed banner header ────────────────────────────────────── */}
       <div className={cn("bg-gradient-to-br px-3 py-3 sm:px-4 sm:pt-4 sm:pb-3", theme.gradient, theme.darkGradient)}>
         <div
@@ -1442,8 +1551,31 @@ function TaskSection(props: {
           aria-expanded={!collapsed}
           aria-controls={`category-body-${props.category.key}`}
         >
-          {/* Left: icon + meta */}
-          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          {/* Left: grip + icon + meta */}
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            {props.canReorderCategory ? (
+              <button
+                type="button"
+                title="Drag to reorder"
+                aria-label={`Reorder ${props.category.label}`}
+                draggable
+                onDragStart={(event) => {
+                  event.stopPropagation();
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", props.category.key);
+                  props.onCategoryDragStart(props.category.key);
+                }}
+                onDragEnd={() => props.onCategoryDragEnd()}
+                onClick={(event) => event.stopPropagation()}
+                className={cn(
+                  "mt-0.5 grid size-8 shrink-0 cursor-grab place-items-center rounded-lg transition active:cursor-grabbing",
+                  theme.accentText,
+                  "opacity-50 hover:bg-white/25 hover:opacity-100 dark:hover:bg-black/20",
+                )}
+              >
+                <GripVertical className="size-4" />
+              </button>
+            ) : null}
             {/* Circular icon */}
             <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full border border-white/40 shadow-sm sm:size-11", theme.accentBg)}>
               {hasIcon
@@ -1586,6 +1718,7 @@ function TaskSection(props: {
         )}
       </AnimatePresence>
     </Card>
+    </motion.div>
   );
 }
 
