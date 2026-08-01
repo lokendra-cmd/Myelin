@@ -2,7 +2,7 @@
 
 import { Controller, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
-import { Tag, PenLine, Smile, AlertCircle, Brain } from "lucide-react";
+import { Tag, PenLine, Smile, AlertCircle, Brain, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IconPicker } from "./IconPicker";
 import { ModalFooter } from "./ModalFooter";
@@ -16,6 +16,11 @@ export const categorySchema = z.object({
   tagline: z.string().max(80, "Max 80 characters").optional(),
   icon: z.string().min(1, "Please select an icon"),
   isBrainDump: z.boolean().optional(),
+  isCaloriesTracker: z.boolean().optional(),
+  targetCalories: z.number().min(0).max(10000).nullable().optional(),
+  targetProtein: z.number().min(0).max(1000).nullable().optional(),
+  targetFat: z.number().min(0).max(1000).nullable().optional(),
+  targetCarbs: z.number().min(0).max(1000).nullable().optional(),
 });
 
 export const ruleSchema = z.object({
@@ -33,6 +38,11 @@ export type EntityFormValues = {
   tagline?: string;
   icon?: string;
   isBrainDump?: boolean;
+  isCaloriesTracker?: boolean;
+  targetCalories?: number | null;
+  targetProtein?: number | null;
+  targetFat?: number | null;
+  targetCarbs?: number | null;
 };
 
 interface EntityFormProps {
@@ -64,6 +74,7 @@ export function EntityForm({
 
   const labelValue = watch("label") || "";
   const taglineValue = watch("tagline") || "";
+  const isCaloriesTracker = Boolean(watch("isCaloriesTracker"));
 
   const labelCount = labelValue.length;
   const taglineCount = taglineValue.length;
@@ -197,6 +208,112 @@ export function EntityForm({
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
               Tasks in this category will belong to the global Brain Dump workspace instead of today&apos;s sprint.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Calories Tracker Toggle (only for Categories) */}
+      {entityType === "category" && (
+        <div className="flex items-start gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <input
+            type="checkbox"
+            id="isCaloriesTracker"
+            {...register("isCaloriesTracker")}
+            className="mt-1 size-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500 dark:border-zinc-700 dark:bg-zinc-900 cursor-pointer"
+          />
+          <div className="space-y-1">
+            <label
+              htmlFor="isCaloriesTracker"
+              className="flex items-center gap-1.5 text-sm font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer"
+            >
+              <Flame className="size-4 text-orange-500" />
+              Calories Tracker
+            </label>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Enable this to track calories for tasks in this category.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Nutrition Targets (only for Calories Tracker categories) */}
+      {entityType === "category" && isCaloriesTracker && (
+        <div className="rounded-lg border border-orange-100 bg-orange-50/40 p-4 dark:border-orange-950/40 dark:bg-orange-950/10">
+          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Daily Nutrition Targets <span className="font-normal text-zinc-400">(Optional)</span>
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            Set targets to show progress like 300/1000 on the category banner.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <div>
+              <label htmlFor="targetCalories" className="mb-1 block text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                Calories
+              </label>
+              <input
+                id="targetCalories"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                placeholder="1000"
+                {...register("targetCalories", {
+                  setValueAs: (value) => (value === "" ? undefined : Number(value)),
+                })}
+                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-200 dark:border-zinc-800 dark:bg-zinc-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="targetProtein" className="mb-1 block text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                Protein (g)
+              </label>
+              <input
+                id="targetProtein"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.1}
+                placeholder="100"
+                {...register("targetProtein", {
+                  setValueAs: (value) => (value === "" ? undefined : Number(value)),
+                })}
+                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-200 dark:border-zinc-800 dark:bg-zinc-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="targetFat" className="mb-1 block text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                Fat (g)
+              </label>
+              <input
+                id="targetFat"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.1}
+                placeholder="40"
+                {...register("targetFat", {
+                  setValueAs: (value) => (value === "" ? undefined : Number(value)),
+                })}
+                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-200 dark:border-zinc-800 dark:bg-zinc-900"
+              />
+            </div>
+            <div>
+              <label htmlFor="targetCarbs" className="mb-1 block text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                Carbs (g)
+              </label>
+              <input
+                id="targetCarbs"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.1}
+                placeholder="150"
+                {...register("targetCarbs", {
+                  setValueAs: (value) => (value === "" ? undefined : Number(value)),
+                })}
+                className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-1 focus:ring-orange-200 dark:border-zinc-800 dark:bg-zinc-900"
+              />
+            </div>
           </div>
         </div>
       )}

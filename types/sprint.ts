@@ -9,6 +9,11 @@ export type CategoryDTO = {
   themeId?: string;
   icon?: string;
   isBrainDump?: boolean;
+  isCaloriesTracker?: boolean;
+  targetCalories?: number | null;
+  targetProtein?: number | null;
+  targetFat?: number | null;
+  targetCarbs?: number | null;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +43,8 @@ export type TaskDTO = {
   recurringStartDate?: string | null;
   recurringEndDate?: string | null;
   untilComplete?: boolean;
+  /** Sticky highlight for recurring habits across sprints. */
+  highlighted?: boolean;
   deadlineAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -46,6 +53,10 @@ export type TaskDTO = {
     completedAt: string;
   }> | null;
   order: number;
+  calories?: number | null;
+  protein?: number | null;
+  fat?: number | null;
+  carbs?: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -71,6 +82,39 @@ export type AnalyticsData = {
   to: string | null;
   daily: Array<{ date: string; productivity: number }>;
   categories: Array<{ category: Category; label: string; completed: number; total: number }>;
+  calorieTrackers: Array<{
+    category: Category;
+    label: string;
+    mealCount: number;
+    totals: {
+      calories: number;
+      protein: number;
+      fat: number;
+      carbs: number;
+    };
+    targets: {
+      calories: number;
+      protein: number;
+      fat: number;
+      carbs: number;
+    };
+    daily: Array<{
+      date: string;
+      achieved: {
+        calories: number;
+        protein: number;
+        fat: number;
+        carbs: number;
+      };
+      target: {
+        calories: number;
+        protein: number;
+        fat: number;
+        carbs: number;
+      };
+    }>;
+  }>;
+  dailyCalories: Array<{ date: string; calories: number; target: number }>;
   habits: HabitStat[];
   averageProductivity: number;
   longestStreak: number;

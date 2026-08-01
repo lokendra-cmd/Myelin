@@ -3,6 +3,7 @@ import { Suspense, type ElementType } from "react";
 import { Activity, Flame, TrendingDown, TrendingUp } from "lucide-react";
 import { getAnalytics } from "@/actions/sprints";
 import { AnalyticsCharts } from "@/components/analytics-charts";
+import { CalorieTrackerAnalytics } from "@/components/calorie-tracker-analytics";
 import { AnalyticsRangeFilter } from "@/components/analytics-range-filter";
 import { HabitAnalytics } from "@/components/habit-analytics";
 import { Card } from "@/components/ui/card";
@@ -54,6 +55,7 @@ export default async function AnalyticsPage({
         />
       </div>
       <AnalyticsCharts data={data} />
+      <CalorieTrackerAnalytics data={data} />
       <HabitAnalytics habits={data.habits} />
     </main>
   );

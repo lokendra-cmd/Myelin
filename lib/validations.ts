@@ -21,6 +21,10 @@ export const taskInputSchema = z.object({
     )
     .optional(),
   order: z.number().optional(),
+  calories: z.number().min(0).max(10000).nullable().optional(),
+  protein: z.number().min(0).max(1000).nullable().optional(),
+  fat: z.number().min(0).max(1000).nullable().optional(),
+  carbs: z.number().min(0).max(1000).nullable().optional(),
 });
 
 export const taskUpdateSchema = taskInputSchema.partial().extend({
@@ -49,6 +53,11 @@ export const categoryInputSchema = z.object({
   icon: z.string().max(50).optional(),
   themeId: z.string().max(50).optional(),
   isBrainDump: z.boolean().optional(),
+  isCaloriesTracker: z.boolean().optional(),
+  targetCalories: z.number().min(0).max(10000).nullable().optional(),
+  targetProtein: z.number().min(0).max(1000).nullable().optional(),
+  targetFat: z.number().min(0).max(1000).nullable().optional(),
+  targetCarbs: z.number().min(0).max(1000).nullable().optional(),
 });
 
 export const categoryUpdateSchema = z.object({
@@ -57,6 +66,11 @@ export const categoryUpdateSchema = z.object({
   icon: z.string().max(50).optional(),
   themeId: z.string().max(50).optional(),
   isBrainDump: z.boolean().optional(),
+  isCaloriesTracker: z.boolean().optional(),
+  targetCalories: z.number().min(0).max(10000).nullable().optional(),
+  targetProtein: z.number().min(0).max(1000).nullable().optional(),
+  targetFat: z.number().min(0).max(1000).nullable().optional(),
+  targetCarbs: z.number().min(0).max(1000).nullable().optional(),
 });
 
 export const ruleInputSchema = z.object({

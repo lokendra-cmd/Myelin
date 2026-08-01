@@ -26,9 +26,12 @@ import { calculateProductivity } from "@/utils/productivity";
 import { ensureRecurringHabitIds, newHabitId } from "@/lib/habitId";
 
 async function recalculateSprint(sprintId: string) {
+  const calTrackerKeys = await CategoryModel.find({ isCaloriesTracker: true }).distinct("key");
+  const excludeMeals = calTrackerKeys.length > 0 ? { category: { $nin: calTrackerKeys } } : {};
+
   const [completedTasks, totalTasks] = await Promise.all([
-    Task.countDocuments({ sprintId, completed: true }),
-    Task.countDocuments({ sprintId }),
+    Task.countDocuments({ sprintId, completed: true, ...excludeMeals }),
+    Task.countDocuments({ sprintId, ...excludeMeals }),
   ]);
 
   const productivity = calculateProductivity(completedTasks, totalTasks);
@@ -101,8 +104,20 @@ export async function getRules(): Promise<RuleDTO[]> {
 
 export async function createCategory(input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId, isBrainDump } = categoryInputSchema.parse(input);
+  const {
+    label,
+    tagline,
+    icon,
+    themeId,
+    isBrainDump,
+    isCaloriesTracker,
+    targetCalories,
+    targetProtein,
+    targetFat,
+    targetCarbs,
+  } = categoryInputSchema.parse(input);
   const order = await CategoryModel.countDocuments();
+  const useTargets = Boolean(isCaloriesTracker);
   const category = await CategoryModel.create({
     key: await uniqueCategoryKey(label),
     label,
@@ -111,6 +126,11 @@ export async function createCategory(input: unknown) {
     icon: icon ?? "",
     themeId: themeId ?? "",
     isBrainDump: isBrainDump ?? false,
+    isCaloriesTracker: isCaloriesTracker ?? false,
+    targetCalories: useTargets ? (targetCalories ?? null) : null,
+    targetProtein: useTargets ? (targetProtein ?? null) : null,
+    targetFat: useTargets ? (targetFat ?? null) : null,
+    targetCarbs: useTargets ? (targetCarbs ?? null) : null,
     order,
   });
   revalidatePath("/");
@@ -119,10 +139,33 @@ export async function createCategory(input: unknown) {
 
 export async function updateCategory(key: string, input: unknown) {
   await connectDB();
-  const { label, tagline, icon, themeId, isBrainDump } = categoryUpdateSchema.parse(input);
+  const {
+    label,
+    tagline,
+    icon,
+    themeId,
+    isBrainDump,
+    isCaloriesTracker,
+    targetCalories,
+    targetProtein,
+    targetFat,
+    targetCarbs,
+  } = categoryUpdateSchema.parse(input);
+  const useTargets = Boolean(isCaloriesTracker);
   const category = await CategoryModel.findOneAndUpdate(
     { key },
-    { label, tagline, icon, themeId, isBrainDump },
+    {
+      label,
+      tagline,
+      icon,
+      themeId,
+      isBrainDump,
+      isCaloriesTracker,
+      targetCalories: useTargets ? (targetCalories ?? null) : null,
+      targetProtein: useTargets ? (targetProtein ?? null) : null,
+      targetFat: useTargets ? (targetFat ?? null) : null,
+      targetCarbs: useTargets ? (targetCarbs ?? null) : null,
+    },
     { new: true }
   ).lean();
   if (!category) throw new Error("Category not found");
@@ -211,6 +254,35 @@ export async function createSprint(date?: string) {
   const sprint = await Sprint.create({ date: targetDate, title, highlightTaskIds: [] });
   const dayOfWeek = new Date(`${targetDate}T00:00:00Z`).getUTCDay();
 
+  // Roll-forward context from the previous sprint (highlights + until-complete tasks)
+  const previousSprint = await Sprint.findOne({
+    date: { $lt: targetDate, $ne: "braindump" },
+  })
+    .sort({ date: -1 })
+    .lean();
+
+  const highlightedHabitIds = new Set<string>();
+  for (const task of await Task.find({ isRecurring: true, highlighted: true })
+    .select({ habitId: 1 })
+    .lean()) {
+    const habitId = (task as { habitId?: string | null }).habitId;
+    if (habitId) highlightedHabitIds.add(habitId);
+  }
+
+  // Backfill: habits highlighted on the previous sprint but missing the sticky flag
+  if (previousSprint) {
+    const prevHighlightIds = normalizeHighlights(previousSprint);
+    if (prevHighlightIds.length) {
+      const prevHighlighted = await Task.find({ _id: { $in: prevHighlightIds } })
+        .select({ habitId: 1 })
+        .lean();
+      for (const task of prevHighlighted) {
+        const habitId = (task as { habitId?: string | null }).habitId;
+        if (habitId) highlightedHabitIds.add(habitId);
+      }
+    }
+  }
+
   // Fetch ALL recurring tasks but deduplicate by habitId (fallback: title+category) so that
   // copies-of-copies from previous sprints don't compound. Keep the first of each unique habit.
   const allRecurring = await Task.find({ isRecurring: true }).sort({ category: 1, order: 1 }).lean();
@@ -243,29 +315,39 @@ export async function createSprint(date?: string) {
     return task.recurringDays.includes(dayOfWeek);
   });
 
+  const carriedHighlightTaskIds: string[] = [];
+
   if (tasksToDuplicate.length) {
-    await Task.insertMany(
-      tasksToDuplicate.map((task, index) => ({
-        sprintId: sprint._id,
-        title: task.title,
-        category: task.category,
-        habitId: (task as { habitId?: string | null }).habitId || newHabitId(),
-        completed: false,
-        isRecurring: true,
-        recurringDays: task.recurringDays || [],
-        recurringStartDate: task.recurringStartDate || null,
-        recurringEndDate: task.recurringEndDate || null,
-        order: index,
-      })),
+    const created = await Task.insertMany(
+      tasksToDuplicate.map((task, index) => {
+        const habitId = (task as { habitId?: string | null }).habitId || newHabitId();
+        const highlighted =
+          Boolean((task as { highlighted?: boolean }).highlighted) || highlightedHabitIds.has(habitId);
+        return {
+          sprintId: sprint._id,
+          title: task.title,
+          category: task.category,
+          habitId,
+          completed: false,
+          isRecurring: true,
+          recurringDays: task.recurringDays || [],
+          recurringStartDate: task.recurringStartDate || null,
+          recurringEndDate: task.recurringEndDate || null,
+          highlighted,
+          order: index,
+        };
+      }),
     );
+    for (const task of created) {
+      if ((task as { highlighted?: boolean }).highlighted) {
+        carriedHighlightTaskIds.push(String(task._id));
+      }
+    }
   }
 
   // Roll forward active "Until Complete" tasks from the previous sprint
-  const previousSprint = await Sprint.findOne({
-    date: { $lt: targetDate, $ne: "braindump" }
-  }).sort({ date: -1 }).lean();
-
   if (previousSprint) {
+    const prevHighlightIds = new Set(normalizeHighlights(previousSprint));
     const activeUntilCompleteTasks = await Task.find({
       sprintId: previousSprint._id,
       untilComplete: true,
@@ -279,9 +361,20 @@ export async function createSprint(date?: string) {
         {
           sprintId: sprint._id,
           deadlineAt: eodUTC ? new Date(eodUTC) : null,
-        }
+        },
       );
+      for (const task of activeUntilCompleteTasks) {
+        if (prevHighlightIds.has(String(task._id))) {
+          carriedHighlightTaskIds.push(String(task._id));
+        }
+      }
     }
+  }
+
+  if (carriedHighlightTaskIds.length) {
+    await Sprint.findByIdAndUpdate(sprint._id, {
+      highlightTaskIds: Array.from(new Set(carriedHighlightTaskIds)),
+    });
   }
 
   await recalculateSprint(String(sprint._id));
@@ -477,12 +570,73 @@ export async function getAnalytics(query?: AnalyticsQuery): Promise<AnalyticsDat
   const docs = await Sprint.find(sprintQuery).sort({ date: 1 }).lean();
   const sprints = await serializeSprintsWithTasks(docs);
   const categoryLabels = new Map(categories.map((category) => [category.key, category.label]));
+  const calorieCategories = categories.filter((category) => category.isCaloriesTracker);
+  const calorieCategoryKeys = new Set(calorieCategories.map((category) => category.key));
   const categoryMap = new Map<Category, { completed: number; total: number }>(
-    categories.map((category) => [category.key, { completed: 0, total: 0 }]),
+    categories
+      .filter((category) => !category.isCaloriesTracker)
+      .map((category) => [category.key, { completed: 0, total: 0 }]),
   );
+  const calorieTrackerMap = new Map<
+    Category,
+    {
+      label: string;
+      mealCount: number;
+      totals: { calories: number; protein: number; fat: number; carbs: number };
+      targets: { calories: number; protein: number; fat: number; carbs: number };
+      daily: Array<{
+        date: string;
+        achieved: { calories: number; protein: number; fat: number; carbs: number };
+        target: { calories: number; protein: number; fat: number; carbs: number };
+      }>;
+    }
+  >(
+    calorieCategories.map((category) => [
+      category.key,
+      {
+        label: category.label,
+        mealCount: 0,
+        totals: { calories: 0, protein: 0, fat: 0, carbs: 0 },
+        targets: {
+          calories: category.targetCalories ?? 0,
+          protein: category.targetProtein ?? 0,
+          fat: category.targetFat ?? 0,
+          carbs: category.targetCarbs ?? 0,
+        },
+        daily: sprints.map((sprint) => ({
+          date: sprint.date.slice(5),
+          achieved: { calories: 0, protein: 0, fat: 0, carbs: 0 },
+          target: {
+            calories: category.targetCalories ?? 0,
+            protein: category.targetProtein ?? 0,
+            fat: category.targetFat ?? 0,
+            carbs: category.targetCarbs ?? 0,
+          },
+        })),
+      },
+    ]),
+  );
+  const dailyTargetCalories = calorieCategories.reduce((sum, category) => sum + (category.targetCalories ?? 0), 0);
+  const dailyCalories = sprints.map((sprint) => ({ date: sprint.date.slice(5), calories: 0, target: dailyTargetCalories }));
 
-  for (const sprint of sprints) {
+  for (const [sprintIndex, sprint] of sprints.entries()) {
     for (const task of sprint.tasks) {
+      if (calorieCategoryKeys.has(task.category)) {
+        const tracker = calorieTrackerMap.get(task.category);
+        if (tracker) {
+          tracker.mealCount += 1;
+          tracker.totals.calories += task.calories ?? 0;
+          tracker.totals.protein += task.protein ?? 0;
+          tracker.totals.fat += task.fat ?? 0;
+          tracker.totals.carbs += task.carbs ?? 0;
+          tracker.daily[sprintIndex].achieved.calories += task.calories ?? 0;
+          tracker.daily[sprintIndex].achieved.protein += task.protein ?? 0;
+          tracker.daily[sprintIndex].achieved.fat += task.fat ?? 0;
+          tracker.daily[sprintIndex].achieved.carbs += task.carbs ?? 0;
+        }
+        dailyCalories[sprintIndex].calories += task.calories ?? 0;
+        continue;
+      }
       if (!categoryMap.has(task.category)) categoryMap.set(task.category, { completed: 0, total: 0 });
       const bucket = categoryMap.get(task.category)!;
       bucket.total += 1;
@@ -505,6 +659,10 @@ export async function getAnalytics(query?: AnalyticsQuery): Promise<AnalyticsDat
       label: categoryLabels.get(category) ?? category,
       ...values,
     })),
+    calorieTrackers: Array.from(calorieTrackerMap.entries())
+      .map(([category, values]) => ({ category, ...values }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    dailyCalories,
     habits: buildHabitStats(sprints, categoryLabels, todayDate),
     averageProductivity,
     longestStreak: getStreak(sprints, tz),
@@ -658,6 +816,12 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
     const existing = normalizeHighlights(sprint);
     const highlightTaskIds = highlight ? Array.from(new Set([...existing, taskId])) : existing.filter((id) => id !== taskId);
     await Sprint.findByIdAndUpdate(sprintId, { highlightTaskIds });
+
+    // Sticky highlight for recurring habits — survives into future sprint copies
+    await Task.findByIdAndUpdate(taskId, { highlighted: highlight });
+    if (habitId && saved && (saved as { isRecurring?: boolean }).isRecurring) {
+      await Task.updateMany({ habitId }, { $set: { highlighted: highlight } });
+    }
   }
   await recalculateSprint(sprintId);
   revalidatePath(`/sprints/${sprintId}`);
