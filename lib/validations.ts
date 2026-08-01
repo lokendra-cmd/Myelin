@@ -2,7 +2,12 @@ import { z } from "zod";
 
 export const taskInputSchema = z.object({
   title: z.string().trim().min(1).max(140),
+  description: z.string().max(1000).optional(),
+  plan: z.string().max(4000).optional(),
   category: z.string().trim().min(1).max(48),
+  estimatedTimeMinutes: z.number().int().min(0).max(10080).nullable().optional(),
+  favorite: z.boolean().optional(),
+  coverImage: z.string().max(2000).nullable().optional(),
   completed: z.boolean().optional(),
   isRecurring: z.boolean().optional(),
   recurringDays: z.array(z.number().min(0).max(6)).optional(),
@@ -31,6 +36,54 @@ export const taskUpdateSchema = taskInputSchema.partial().extend({
   highlight: z.boolean().optional(),
 });
 
+export const planUpdateSchema = z.object({
+  overview: z.string().max(2000).optional(),
+  estimatedTimeMinutes: z.number().int().min(0).max(10080).nullable().optional(),
+});
+
+export const planStepInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  durationMinutes: z.number().int().min(0).max(1440).optional(),
+  icon: z.string().trim().min(1).max(48).optional(),
+  isCompleted: z.boolean().optional(),
+  isCollapsed: z.boolean().optional(),
+  orderIndex: z.number().int().min(0).optional(),
+});
+
+export const planStepUpdateSchema = planStepInputSchema.partial();
+
+export const reorderStepsSchema = z.object({
+  stepIds: z.array(z.string().min(1)).min(1),
+});
+
+
+export const checklistInputSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  orderIndex: z.number().int().min(0).optional(),
+});
+
+export const checklistUpdateSchema = checklistInputSchema.partial();
+
+export const checklistItemInputSchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  completed: z.boolean().optional(),
+  orderIndex: z.number().int().min(0).optional(),
+});
+
+export const checklistItemUpdateSchema = checklistItemInputSchema.partial();
+
+export const noteUpdateSchema = z.object({
+  content: z.string().max(50000),
+});
+
+export const attachmentInputSchema = z.object({
+  fileName: z.string().trim().min(1).max(260),
+  storageUrl: z.string().trim().min(1).max(2000),
+  mimeType: z.string().max(120).optional(),
+  size: z.number().int().min(0).optional(),
+});
+
 export const sprintUpdateSchema = z.object({
   title: z.string().trim().min(1).max(100).optional(),
   reflection: z
@@ -45,6 +98,10 @@ export const sprintUpdateSchema = z.object({
 
 export const reorderSchema = z.object({
   taskIds: z.array(z.string()).min(1),
+});
+
+export const reorderCategoriesSchema = z.object({
+  categoryKeys: z.array(z.string().min(1)).min(1),
 });
 
 export const categoryInputSchema = z.object({

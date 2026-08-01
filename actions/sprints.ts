@@ -13,7 +13,7 @@ function revalidatePath(path: string) {
 import { DEFAULT_CATEGORIES, SPRINT_RULES } from "@/lib/constants";
 import { connectDB } from "@/lib/db";
 import { serializeCategory, serializeSprint, serializeRule, serializeBrainDumpThought } from "@/lib/serializers";
-import { categoryInputSchema, categoryUpdateSchema, reorderSchema, sprintUpdateSchema, taskInputSchema, taskUpdateSchema, ruleInputSchema, ruleUpdateSchema } from "@/lib/validations";
+import { categoryInputSchema, categoryUpdateSchema, reorderCategoriesSchema, reorderSchema, sprintUpdateSchema, taskInputSchema, taskUpdateSchema, ruleInputSchema, ruleUpdateSchema } from "@/lib/validations";
 import { Category as CategoryModel } from "@/models/Category";
 import { Rule as RuleModel } from "@/models/Rule";
 import { Sprint } from "@/models/Sprint";
@@ -171,6 +171,29 @@ export async function updateCategory(key: string, input: unknown) {
   if (!category) throw new Error("Category not found");
   revalidatePath("/");
   return serializeCategory(category);
+}
+
+export async function reorderCategories(input: unknown) {
+  await connectDB();
+  const { categoryKeys } = reorderCategoriesSchema.parse(input);
+  const existing = await CategoryModel.find({ key: { $in: categoryKeys } })
+    .select({ key: 1, order: 1 })
+    .lean();
+  const byKey = new Map(existing.map((c) => [String(c.key), Number(c.order ?? 0)]));
+
+  if (byKey.size !== categoryKeys.length) {
+    throw new Error("One or more categories were not found");
+  }
+
+  await Promise.all(
+    categoryKeys.map((key, order) => {
+      if (byKey.get(key) === order) return Promise.resolve();
+      return CategoryModel.updateOne({ key }, { order });
+    }),
+  );
+
+  revalidatePath("/");
+  return getCategories();
 }
 
 export async function createRule(input: unknown) {
@@ -832,6 +855,9 @@ export async function updateTask(sprintId: string, taskId: string, input: unknow
 export async function deleteTask(sprintId: string, taskId: string) {
   await connectDB();
   await Task.findOneAndDelete({ _id: taskId, sprintId });
+  // Cascade plan/checklist/note/attachment docs so orphans don't accumulate at scale.
+  const { cascadeDeleteTaskPlanData } = await import("@/actions/task-plans");
+  await cascadeDeleteTaskPlanData(taskId);
   const sprint = await Sprint.findById(sprintId);
   if (sprint) {
     sprint.set("highlightTaskIds", normalizeHighlights(sprint.toObject()).filter((id) => id !== taskId));
