@@ -271,3 +271,90 @@ export function SprintPageLoader() {
     </Shell>
   );
 }
+
+export function TaskPlanPageLoader() {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 pb-40 pt-4 sm:px-6 md:pb-28 lg:px-8">
+      <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
+        <motion.div variants={item}>
+          <ProgressRail />
+          <LoadingMark label="Loading plan" />
+        </motion.div>
+
+        <motion.section
+          variants={item}
+          className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-zinc-100 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <div className="relative h-44 sm:h-56 md:h-64">
+            <div className="absolute inset-0 bg-gradient-to-br from-zinc-200 via-zinc-100 to-emerald-100/40 dark:from-zinc-900 dark:via-zinc-950 dark:to-emerald-950/30" />
+            <motion.div
+              aria-hidden
+              className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.18),_transparent_55%)]"
+              animate={{ opacity: [0.35, 0.7, 0.35] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <CoverPulseMark />
+            </div>
+            <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3 sm:p-4">
+              <Bone className="h-8 w-28 rounded-full" />
+              <div className="flex gap-1.5">
+                <Bone className="size-9 rounded-full" />
+                <Bone className="size-9 rounded-full" />
+                <Bone className="size-9 rounded-full" />
+              </div>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 space-y-3 p-4 sm:p-6">
+              <Bone className="h-8 w-2/3 max-w-md rounded-xl" />
+              <Bone className="h-4 w-1/2 max-w-sm rounded-lg" />
+              <div className="flex gap-2">
+                <Bone className="h-7 w-24 rounded-full" />
+                <Bone className="h-7 w-20 rounded-full" />
+                <Bone className="h-7 w-28 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </motion.section>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 space-y-3">
+            <div className="flex items-center justify-between">
+              <Bone className="h-5 w-28 rounded-lg" />
+              <Bone className="h-9 w-28 rounded-xl" />
+            </div>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Bone key={i} className="h-[72px] rounded-2xl" />
+            ))}
+          </div>
+          <aside className="hidden space-y-3 lg:block">
+            <Bone className="h-56 rounded-2xl" />
+          </aside>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function CoverPulseMark() {
+  return (
+    <div className="relative grid size-14 place-items-center">
+      <motion.span
+        className="absolute inset-0 rounded-2xl border border-emerald-400/35"
+        animate={{ scale: [1, 1.28, 1], opacity: [0.55, 0, 0.55] }}
+        transition={{ duration: 1.7, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.span
+        className="absolute inset-1 rounded-xl border border-emerald-500/30"
+        animate={{ scale: [1, 1.16, 1], opacity: [0.4, 0, 0.4] }}
+        transition={{ duration: 1.7, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+      />
+      <motion.span
+        className="grid size-10 place-items-center rounded-xl bg-zinc-950/90 text-xs font-semibold text-white shadow-lg shadow-emerald-900/20 backdrop-blur dark:bg-white/90 dark:text-zinc-950"
+        animate={{ y: [0, -2, 0] }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        M
+      </motion.span>
+    </div>
+  );
+}

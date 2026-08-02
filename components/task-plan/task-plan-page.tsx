@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { IconPicker } from "@/components/entity/IconPicker";
+import { TaskPlanPageLoader } from "@/components/loading/page-loaders";
 import { DEFAULT_PLAN_COVER, DEFAULT_PLAN_COVER_DARK } from "@/lib/plan-constants";
 import { getStepIcon } from "@/lib/step-icons";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,25 @@ import type {
   TaskPlanStepDTO,
 } from "@/types/task-plan";
 import * as Dialog from "@radix-ui/react-dialog";
+
+const easeOut = [0.16, 1, 0.3, 1] as const;
+
+const pageReveal = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.07, delayChildren: 0.02 },
+  },
+};
+
+const sectionReveal = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease: easeOut },
+  },
+};
 
 function formatMinutes(mins: number | null | undefined) {
   if (mins == null || mins <= 0) return null;
@@ -66,22 +86,121 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+const planPrefetch = new Map<string, Promise<TaskPlanPageDTO>>();
+
+/** Warm the plan payload on hover so navigation feels instant. */
+export function prefetchTaskPlan(taskId: string) {
+  if (planPrefetch.has(taskId)) return;
+  const req = jsonFetch<TaskPlanPageDTO>(`/api/tasks/${taskId}/plan`).catch((error) => {
+    planPrefetch.delete(taskId);
+    throw error;
+  });
+  planPrefetch.set(taskId, req);
+}
+
+function getTaskPlan(taskId: string) {
+  const cached = planPrefetch.get(taskId);
+  if (cached) return cached;
+  const req = jsonFetch<TaskPlanPageDTO>(`/api/tasks/${taskId}/plan`);
+  planPrefetch.set(taskId, req);
+  return req;
+}
+
 export function TaskPlanPage({
-  initial,
   sprintId,
+  taskId,
 }: {
-  initial: TaskPlanPageDTO;
   sprintId: string;
+  taskId: string;
 }) {
   const router = useRouter();
-  const [page, setPage] = useState(initial);
+  const [page, setPage] = useState<TaskPlanPageDTO | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingMeta, setEditingMeta] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(initial.task.title);
-  const [descDraft, setDescDraft] = useState(initial.task.description);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [descDraft, setDescDraft] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoadError(null);
+
+    void (async () => {
+      try {
+        const data = await getTaskPlan(taskId);
+        if (cancelled) return;
+        if (data.task.sprintId !== sprintId) {
+          setLoadError("Task not found in this sprint.");
+          return;
+        }
+        setPage(data);
+        setTitleDraft(data.task.title);
+        setDescDraft(data.task.description);
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : "Failed to load plan");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sprintId, taskId]);
+
+  if (loadError) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-4 px-4 py-24 text-center">
+        <p className="text-sm text-zinc-500">{loadError}</p>
+        <Button variant="subtle" onClick={() => router.push(`/sprints/${sprintId}`)}>
+          <ArrowLeft className="size-4" />
+          Back to Tasks
+        </Button>
+      </div>
+    );
+  }
+
+  if (!page) {
+    return <TaskPlanPageLoader />;
+  }
+
+  return (
+    <TaskPlanPageContent
+      page={page}
+      setPage={setPage}
+      sprintId={sprintId}
+      editingMeta={editingMeta}
+      setEditingMeta={setEditingMeta}
+      titleDraft={titleDraft}
+      setTitleDraft={setTitleDraft}
+      descDraft={descDraft}
+      setDescDraft={setDescDraft}
+    />
+  );
+}
+
+function TaskPlanPageContent({
+  page,
+  setPage,
+  sprintId,
+  editingMeta,
+  setEditingMeta,
+  titleDraft,
+  setTitleDraft,
+  descDraft,
+  setDescDraft,
+}: {
+  page: TaskPlanPageDTO;
+  setPage: React.Dispatch<React.SetStateAction<TaskPlanPageDTO | null>>;
+  sprintId: string;
+  editingMeta: boolean;
+  setEditingMeta: (open: boolean) => void;
+  titleDraft: string;
+  setTitleDraft: (value: string) => void;
+  descDraft: string;
+  setDescDraft: (value: string) => void;
+}) {
+  const router = useRouter();
   const task = page.task;
   const plan = page.plan;
-  const hasCustomCover = Boolean(task.coverImage);
   const estimated =
     formatMinutes(plan.estimatedTimeMinutes ?? task.estimatedTimeMinutes) ??
     formatMinutes(plan.steps.reduce((sum, s) => sum + (s.durationMinutes || 0), 0));
@@ -91,42 +210,47 @@ export function TaskPlanPage({
       ? Math.round((plan.steps.filter((s) => s.isCompleted).length / plan.steps.length) * 100)
       : page.completionPercent;
 
-  const setSteps = useCallback((steps: TaskPlanStepDTO[]) => {
-    setPage((prev) => ({
-      ...prev,
-      plan: { ...prev.plan, steps },
-      completionPercent:
-        steps.length > 0
-          ? Math.round((steps.filter((s) => s.isCompleted).length / steps.length) * 100)
-          : 0,
-      task: {
-        ...prev.task,
-        planStepCount: steps.length,
-        planCompletedStepCount: steps.filter((s) => s.isCompleted).length,
-      },
-    }));
-  }, []);
+  const setSteps = useCallback(
+    (steps: TaskPlanStepDTO[]) => {
+      setPage((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          plan: { ...prev.plan, steps },
+          completionPercent:
+            steps.length > 0
+              ? Math.round((steps.filter((s) => s.isCompleted).length / steps.length) * 100)
+              : 0,
+          task: {
+            ...prev.task,
+            planStepCount: steps.length,
+            planCompletedStepCount: steps.filter((s) => s.isCompleted).length,
+          },
+        };
+      });
+    },
+    [setPage],
+  );
 
   async function toggleFavorite() {
     const next = !task.favorite;
-    setPage((p) => ({ ...p, task: { ...p.task, favorite: next } }));
+    setPage((p) => (p ? { ...p, task: { ...p.task, favorite: next } } : p));
     try {
       await jsonFetch(`/api/sprints/${sprintId}/tasks`, {
         method: "PATCH",
         body: JSON.stringify({ taskId: task._id, favorite: next }),
       });
     } catch {
-      setPage((p) => ({ ...p, task: { ...p.task, favorite: !next } }));
+      setPage((p) => (p ? { ...p, task: { ...p.task, favorite: !next } } : p));
     }
   }
 
   async function saveMeta() {
     const title = titleDraft.trim();
     if (!title) return;
-    setPage((p) => ({
-      ...p,
-      task: { ...p.task, title, description: descDraft.trim() },
-    }));
+    setPage((p) =>
+      p ? { ...p, task: { ...p.task, title, description: descDraft.trim() } } : p,
+    );
     setEditingMeta(false);
     await jsonFetch(`/api/sprints/${sprintId}/tasks`, {
       method: "PATCH",
@@ -162,7 +286,7 @@ export function TaskPlanPage({
   }
 
   async function markComplete() {
-    setPage((p) => ({ ...p, task: { ...p.task, completed: true } }));
+    setPage((p) => (p ? { ...p, task: { ...p.task, completed: true } } : p));
     await jsonFetch(`/api/sprints/${sprintId}/tasks`, {
       method: "PATCH",
       body: JSON.stringify({ taskId: task._id, completed: true }),
@@ -171,7 +295,9 @@ export function TaskPlanPage({
 
   async function startTask() {
     const now = new Date().toISOString();
-    setPage((p) => ({ ...p, task: { ...p.task, startedAt: now, completed: false } }));
+    setPage((p) =>
+      p ? { ...p, task: { ...p.task, startedAt: now, completed: false } } : p,
+    );
     await jsonFetch(`/api/sprints/${sprintId}/tasks`, {
       method: "PATCH",
       body: JSON.stringify({ taskId: task._id, startedAt: now }),
@@ -179,42 +305,22 @@ export function TaskPlanPage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-40 pt-4 sm:px-6 md:pb-28 lg:px-8">
-      {/* Header */}
-      <section className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-zinc-100 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <motion.div
+      className="mx-auto w-full max-w-6xl px-4 pb-40 pt-4 sm:px-6 md:pb-28 lg:px-8"
+      variants={pageReveal}
+      initial="hidden"
+      animate="show"
+    >
+      {/* Header — chrome paints immediately; cover fades in on its own */}
+      <motion.section
+        variants={sectionReveal}
+        className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-zinc-100 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      >
         <div className="relative h-44 sm:h-56 md:h-64">
-          {hasCustomCover ? (
-            <Image
-              src={task.coverImage!}
-              alt=""
-              fill
-              priority
-              className="object-cover"
-              sizes="(max-width: 1152px) 100vw, 1152px"
-            />
-          ) : (
-            <>
-              <Image
-                src={DEFAULT_PLAN_COVER}
-                alt=""
-                fill
-                priority
-                className="object-cover dark:hidden"
-                sizes="(max-width: 1152px) 100vw, 1152px"
-              />
-              <Image
-                src={DEFAULT_PLAN_COVER_DARK}
-                alt=""
-                fill
-                priority
-                className="hidden object-cover dark:block"
-                sizes="(max-width: 1152px) 100vw, 1152px"
-              />
-            </>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/25 dark:from-black/50 dark:via-black/20 dark:to-black/35" />
+          <PlanCover coverImage={task.coverImage} />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/25 dark:from-black/50 dark:via-black/20 dark:to-black/35" />
 
-          <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3 sm:p-4">
+          <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3 sm:p-4">
             <Link
               href={`/sprints/${sprintId}`}
               className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm backdrop-blur transition hover:bg-white dark:bg-zinc-950/80 dark:text-zinc-100"
@@ -239,7 +345,7 @@ export function TaskPlanPage({
             </div>
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
+          <div className="absolute inset-x-0 bottom-0 z-10 p-4 sm:p-6">
             <div className="flex items-start gap-3 sm:gap-4">
               <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-800 shadow-sm sm:size-12 dark:bg-emerald-950 dark:text-emerald-300">
                 <List className="size-5" />
@@ -268,7 +374,7 @@ export function TaskPlanPage({
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Edit task meta modal */}
       <Dialog.Root open={editingMeta} onOpenChange={closeEditMeta}>
@@ -392,7 +498,7 @@ export function TaskPlanPage({
       </Dialog.Root>
 
       {/* Body */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <motion.div variants={sectionReveal} className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0">
           <PlanStepsPanel
             taskId={task._id}
@@ -411,10 +517,13 @@ export function TaskPlanPage({
             <OverviewRow label="Steps" value={String(plan.steps.length)} />
           </SidebarCard>
         </aside>
-      </div>
+      </motion.div>
 
       {/* Footer CTAs — sit above mobile bottom nav */}
-      <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90 md:bottom-0 sm:px-6">
+      <motion.div
+        variants={sectionReveal}
+        className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90 md:bottom-0 sm:px-6"
+      >
         <div className="mx-auto flex w-full max-w-6xl gap-3">
           <Button
             variant="subtle"
@@ -434,7 +543,113 @@ export function TaskPlanPage({
             Start Task
           </Button>
         </div>
-      </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function PlanCover({ coverImage }: { coverImage: string | null }) {
+  const hasCustomCover = Boolean(coverImage);
+  const [lightReady, setLightReady] = useState(false);
+  const [darkReady, setDarkReady] = useState(false);
+  const [customReady, setCustomReady] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setIsDark(root.classList.contains("dark"));
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+
+  const ready = hasCustomCover ? customReady : isDark ? darkReady : lightReady;
+
+  return (
+    <div className="absolute inset-0">
+      {/* Always-visible atmospheric base — never blocked by image decode */}
+      <div className="absolute inset-0 bg-gradient-to-br from-zinc-300 via-zinc-200 to-emerald-100/50 dark:from-zinc-900 dark:via-zinc-950 dark:to-emerald-950/40" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(16,185,129,0.22),transparent_55%)] dark:bg-[radial-gradient(ellipse_at_30%_20%,rgba(16,185,129,0.16),transparent_55%)]" />
+
+      <AnimatePresence>
+        {!ready && (
+          <motion.div
+            key="cover-loader"
+            className="absolute inset-0 z-[1] flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <div className="relative grid size-14 place-items-center">
+              <motion.span
+                className="absolute inset-0 rounded-2xl border border-white/35"
+                animate={{ scale: [1, 1.3, 1], opacity: [0.55, 0, 0.55] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <motion.span
+                className="absolute inset-1 rounded-xl border border-emerald-300/40"
+                animate={{ scale: [1, 1.15, 1], opacity: [0.45, 0, 0.45] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+              />
+              <motion.span
+                className="grid size-10 place-items-center rounded-xl bg-black/45 text-xs font-semibold text-white shadow-lg backdrop-blur-md"
+                animate={{ y: [0, -2, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              >
+                M
+              </motion.span>
+            </div>
+            <div
+              aria-hidden
+              className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/25 to-transparent dark:via-white/10"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {hasCustomCover ? (
+        <Image
+          src={coverImage!}
+          alt=""
+          fill
+          sizes="(max-width: 1152px) 100vw, 1152px"
+          className={cn(
+            "object-cover transition-opacity duration-500 ease-out",
+            customReady ? "opacity-100" : "opacity-0",
+          )}
+          onLoad={() => setCustomReady(true)}
+          onError={() => setCustomReady(true)}
+        />
+      ) : (
+        <>
+          <Image
+            src={DEFAULT_PLAN_COVER}
+            alt=""
+            fill
+            sizes="(max-width: 1152px) 100vw, 1152px"
+            className={cn(
+              "object-cover transition-opacity duration-500 ease-out dark:hidden",
+              lightReady ? "opacity-100" : "opacity-0",
+            )}
+            onLoad={() => setLightReady(true)}
+            onError={() => setLightReady(true)}
+          />
+          <Image
+            src={DEFAULT_PLAN_COVER_DARK}
+            alt=""
+            fill
+            sizes="(max-width: 1152px) 100vw, 1152px"
+            className={cn(
+              "hidden object-cover transition-opacity duration-500 ease-out dark:block",
+              darkReady ? "opacity-100" : "opacity-0",
+            )}
+            onLoad={() => setDarkReady(true)}
+            onError={() => setDarkReady(true)}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -554,11 +769,17 @@ function PlanStepsPanel({
   const [newIcon, setNewIcon] = useState("Clipboard");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Live drag order — useOptimistic reverts when the transition ends, so drag uses its own state.
+  const [dragOrder, setDragOrder] = useState<TaskPlanStepDTO[] | null>(null);
+  const dragIdRef = useRef<string | null>(null);
+  const dragOrderRef = useRef<TaskPlanStepDTO[] | null>(null);
   const [pending, startTransition] = useTransition();
   const listRef = useRef<HTMLDivElement>(null);
 
+  const displaySteps = dragOrder ?? optimisticSteps;
+
   // Soft virtualization via content-visibility for long lists.
-  const useVirtualHint = optimisticSteps.length > 40;
+  const useVirtualHint = displaySteps.length > 40;
 
   async function addStep() {
     const title = newTitle.trim();
@@ -627,30 +848,54 @@ function PlanStepsPanel({
   }
 
   function onDragStart(id: string) {
+    const initial = displaySteps.map((s, i) => ({ ...s, orderIndex: i }));
+    dragIdRef.current = id;
+    dragOrderRef.current = initial;
     setDragId(id);
+    setDragOrder(initial);
   }
 
   function onDragOver(e: React.DragEvent, overId: string) {
     e.preventDefault();
-    if (!dragId || dragId === overId) return;
-    const from = optimisticSteps.findIndex((s) => s._id === dragId);
-    const to = optimisticSteps.findIndex((s) => s._id === overId);
-    if (from < 0 || to < 0) return;
-    const next = [...optimisticSteps];
+    e.dataTransfer.dropEffect = "move";
+    const activeId = dragIdRef.current;
+    const list = dragOrderRef.current;
+    if (!activeId || !list || activeId === overId) return;
+
+    const from = list.findIndex((s) => s._id === activeId);
+    const to = list.findIndex((s) => s._id === overId);
+    if (from < 0 || to < 0 || from === to) return;
+
+    const next = [...list];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
-    startTransition(() => applyOptimistic(next.map((s, i) => ({ ...s, orderIndex: i }))));
+    const ordered = next.map((s, i) => ({ ...s, orderIndex: i }));
+    dragOrderRef.current = ordered;
+    setDragOrder(ordered);
   }
 
   async function onDragEnd() {
-    if (!dragId) return;
+    const ordered = dragOrderRef.current;
+    const activeId = dragIdRef.current;
+    dragIdRef.current = null;
+    dragOrderRef.current = null;
     setDragId(null);
-    const ordered = optimisticSteps.map((s) => s._id);
-    onStepsChange(optimisticSteps.map((s, i) => ({ ...s, orderIndex: i })));
-    await jsonFetch(`/api/tasks/${taskId}/plan/steps`, {
-      method: "PUT",
-      body: JSON.stringify({ stepIds: ordered }),
-    });
+    setDragOrder(null);
+    if (!activeId || !ordered) return;
+
+    const unchanged =
+      ordered.length === steps.length && ordered.every((s, i) => s._id === steps[i]?._id);
+    if (unchanged) return;
+
+    onStepsChange(ordered);
+    try {
+      await jsonFetch(`/api/tasks/${taskId}/plan/steps`, {
+        method: "PUT",
+        body: JSON.stringify({ stepIds: ordered.map((s) => s._id) }),
+      });
+    } catch {
+      onStepsChange(steps);
+    }
   }
 
   return (
@@ -660,12 +905,18 @@ function PlanStepsPanel({
         <p className="mt-0.5 text-sm text-zinc-500">Break down the task into clear, actionable steps</p>
       </div>
 
-      <div ref={listRef} className="mt-5 space-y-3">
+      <div
+        ref={listRef}
+        className="mt-5 space-y-3"
+        onDragOver={(e) => {
+          if (dragIdRef.current) e.preventDefault();
+        }}
+      >
         <AnimatePresence initial={false}>
-          {optimisticSteps.map((step, index) => (
+          {displaySteps.map((step, index) => (
             <motion.div
               key={step._id}
-              layout
+              layout={!dragId}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, height: 0 }}
@@ -677,7 +928,7 @@ function PlanStepsPanel({
                 dragging={dragId === step._id}
                 onDragStart={() => onDragStart(step._id)}
                 onDragOver={(e) => onDragOver(e, step._id)}
-                onDragEnd={onDragEnd}
+                onDragEnd={() => void onDragEnd()}
                 onToggleComplete={() => patchStep(step._id, { isCompleted: !step.isCompleted })}
                 onDuplicate={() => void duplicateStep(step._id)}
                 onDelete={() => void removeStep(step._id)}
@@ -825,6 +1076,9 @@ function StepCard({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(step.title);
   const [description, setDescription] = useState(step.description);
+  const allowDragRef = useRef(false);
+  const dragStartedRef = useRef(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const hasDescription = Boolean(step.description?.trim());
 
@@ -842,12 +1096,31 @@ function StepCard({
     return () => document.removeEventListener("mousedown", close);
   }, [menuOpen]);
 
+  function disableDrag() {
+    allowDragRef.current = false;
+    dragStartedRef.current = false;
+    cardRef.current?.setAttribute("draggable", "false");
+  }
+
   return (
     <div
-      draggable={!editing}
-      onDragStart={onDragStart}
+      ref={cardRef}
+      draggable={false}
+      onDragStart={(e) => {
+        if (editing || !allowDragRef.current) {
+          e.preventDefault();
+          return;
+        }
+        dragStartedRef.current = true;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", step._id);
+        onDragStart();
+      }}
       onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
+      onDragEnd={() => {
+        disableDrag();
+        onDragEnd();
+      }}
       className={cn(
         "group rounded-2xl border border-zinc-200/90 bg-white px-3 py-3 shadow-sm shadow-zinc-950/[0.03] transition dark:border-zinc-800 dark:bg-zinc-950 sm:px-4",
         dragging && "opacity-60 ring-2 ring-emerald-300",
@@ -892,6 +1165,19 @@ function StepCard({
             className="shrink-0 cursor-grab touch-none text-zinc-300 hover:text-zinc-500 active:cursor-grabbing"
             aria-label="Drag to reorder"
             tabIndex={-1}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return;
+              dragStartedRef.current = false;
+              allowDragRef.current = true;
+              cardRef.current?.setAttribute("draggable", "true");
+              const clearIfNotDragging = () => {
+                window.removeEventListener("pointerup", clearIfNotDragging);
+                window.removeEventListener("pointercancel", clearIfNotDragging);
+                if (!dragStartedRef.current) disableDrag();
+              };
+              window.addEventListener("pointerup", clearIfNotDragging);
+              window.addEventListener("pointercancel", clearIfNotDragging);
+            }}
           >
             <GripVertical className="size-4" />
           </button>

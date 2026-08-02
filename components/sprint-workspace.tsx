@@ -11,6 +11,7 @@ import { TaskModal } from "@/components/tasks/TaskModal";
 import { MealModal } from "@/components/tasks/MealModal";
 import { MealItem } from "@/components/tasks/MealItem";
 import { NutritionSummary } from "@/components/nutrition-summary";
+import { prefetchTaskPlan } from "@/components/task-plan/task-plan-page";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -1068,6 +1069,8 @@ function TaskItem({
                   <Link
                     href={`/sprints/${task.sprintId}/tasks/${task._id}`}
                     onClick={() => setMenuOpen(false)}
+                    onMouseEnter={() => prefetchTaskPlan(task._id)}
+                    onFocus={() => prefetchTaskPlan(task._id)}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
                   >
                     <List className="size-3.5" />
@@ -1100,6 +1103,8 @@ function TaskItem({
                   <Link
                     href={`/sprints/${task.sprintId}/tasks/${task._id}`}
                     onClick={() => setMenuOpen(false)}
+                    onMouseEnter={() => prefetchTaskPlan(task._id)}
+                    onFocus={() => prefetchTaskPlan(task._id)}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
                   >
                     <List className="size-3.5" />
@@ -1395,6 +1400,8 @@ function TaskItem({
               <Link
                 href={`/sprints/${task.sprintId}/tasks/${task._id}`}
                 title="Plan"
+                onMouseEnter={() => prefetchTaskPlan(task._id)}
+                onFocus={() => prefetchTaskPlan(task._id)}
                 className={cn(
                   "ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition",
                   hasPlan

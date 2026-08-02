@@ -93,26 +93,27 @@ export async function getTaskPlanPage(taskId: string): Promise<TaskPlanPageDTO> 
   if (!task) throw new Error("Task not found");
 
   const planDoc = await ensurePlan(taskId);
-  const { steps } = await loadPlanBundle(String(planDoc._id));
+  const categoryKey = String((task as { category?: string }).category ?? "");
 
-  // Refresh denormalized counters if they drifted (e.g. after partial writes).
+  const [{ steps }, category] = await Promise.all([
+    loadPlanBundle(String(planDoc._id)),
+    categoryKey
+      ? CategoryModel.findOne({ key: categoryKey }).select({ label: 1 }).lean()
+      : Promise.resolve(null),
+  ]);
+
+  // Refresh denormalized counters if they drifted — don't block the response.
   const completed = steps.filter((s) => s.isCompleted).length;
-  if (
-    Number((task as { planStepCount?: number }).planStepCount ?? 0) !== steps.length ||
-    Number((task as { planCompletedStepCount?: number }).planCompletedStepCount ?? 0) !== completed
-  ) {
-    await Task.findByIdAndUpdate(taskId, {
+  const stepCount = Number((task as { planStepCount?: number }).planStepCount ?? 0);
+  const completedCount = Number((task as { planCompletedStepCount?: number }).planCompletedStepCount ?? 0);
+  if (stepCount !== steps.length || completedCount !== completed) {
+    void Task.findByIdAndUpdate(taskId, {
       planStepCount: steps.length,
       planCompletedStepCount: completed,
     });
     (task as { planStepCount: number }).planStepCount = steps.length;
     (task as { planCompletedStepCount: number }).planCompletedStepCount = completed;
   }
-
-  const categoryKey = String((task as { category?: string }).category ?? "");
-  const category = categoryKey
-    ? await CategoryModel.findOne({ key: categoryKey }).select({ label: 1 }).lean()
-    : null;
 
   return serializePlanPage(
     task,
