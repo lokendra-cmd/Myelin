@@ -237,6 +237,8 @@ export function serializeBrainDumpThought(thought: LeanTask): BrainDumpThoughtDT
   return {
     _id: String(thought._id),
     text: String(thought.text ?? ""),
+    description: String(thought.description ?? ""),
+    link: String(thought.link ?? ""),
     category: String(thought.category ?? ""),
     order: Number(thought.order ?? 0),
     createdAt: new Date(thought.createdAt as string | Date).toISOString(),

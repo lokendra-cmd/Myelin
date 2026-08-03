@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   Brain,
   Trash2,
@@ -9,11 +9,12 @@ import {
   ChevronDown,
   ChevronUp,
   Pencil,
-  X,
   Sparkles,
   MoreHorizontal,
   Folder,
   CheckCircle2,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Card } from "@/components/ui/card";
@@ -29,6 +30,20 @@ import {
 import type { CategoryDTO, BrainDumpThoughtDTO } from "@/types/sprint";
 import type { EntityFormValues } from "@/components/entity/EntityForm";
 import { cn } from "@/lib/utils";
+
+function formatLinkLabel(link: string): string {
+  try {
+    const url = new URL(link.startsWith("http") ? link : `https://${link}`);
+    const path = url.pathname === "/" ? "" : url.pathname;
+    const display = `${url.hostname.replace(/^www\./, "")}${path}`;
+    return display.length > 48 ? `${display.slice(0, 45)}…` : display;
+  } catch {
+    return link.length > 48 ? `${link.slice(0, 45)}…` : link;
+  }
+}
+
+const thoughtFieldClass =
+  "w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 text-sm outline-none transition focus:border-violet-400 dark:focus:border-violet-600 focus:bg-white dark:focus:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400";
 
 interface BrainDumpWorkspaceProps {
   initialCategories: CategoryDTO[];
@@ -57,22 +72,19 @@ export function BrainDumpWorkspace({
   // Inline add thought states
   const [addingCategoryKey, setAddingCategoryKey] = useState<string | null>(null);
   const [addingText, setAddingText] = useState("");
+  const [addingDescription, setAddingDescription] = useState("");
+  const [addingLink, setAddingLink] = useState("");
 
   // Inline edit thought states
   const [editingThoughtId, setEditingThoughtId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [editingDescription, setEditingDescription] = useState("");
+  const [editingLink, setEditingLink] = useState("");
 
   // Async transitions
   const [isPending, startTransition] = useTransition();
 
-  // Expand the first category by default if available
-  useEffect(() => {
-    const brainDumpCats = initialCategories.filter((c) => c.isBrainDump);
-    if (brainDumpCats.length > 0) {
-      setExpanded({ [brainDumpCats[0].key]: true });
-    }
-  }, [initialCategories]);
-
+  // start closed; only toggleCategory / create-category open states apply
   const toggleCategory = (key: string) => {
     setExpanded((prev) => ({
       ...prev,
@@ -80,16 +92,27 @@ export function BrainDumpWorkspace({
     }));
   };
 
+  const resetAddForm = () => {
+    setAddingText("");
+    setAddingDescription("");
+    setAddingLink("");
+    setAddingCategoryKey(null);
+  };
+
   // Add thought handler
   const handleAddThought = async (categoryKey: string) => {
     const text = addingText.trim();
     if (!text) return;
-    setAddingText("");
-    setAddingCategoryKey(null);
+    const description = addingDescription.trim();
+    const link = addingLink.trim();
+    resetAddForm();
 
     startTransition(async () => {
       try {
-        const newThought = await createBrainDumpThought(text, categoryKey);
+        const newThought = await createBrainDumpThought(text, categoryKey, {
+          description,
+          link,
+        });
         setThoughts((prev) => [...prev, newThought]);
       } catch (error) {
         console.error("Failed to add thought:", error);
@@ -101,16 +124,29 @@ export function BrainDumpWorkspace({
   const handleSaveEdit = async (thoughtId: string) => {
     const text = editingText.trim();
     if (!text) return;
+    const description = editingDescription.trim();
+    const link = editingLink.trim();
     setEditingThoughtId(null);
 
     startTransition(async () => {
       try {
-        const updated = await updateBrainDumpThought(thoughtId, text);
+        const updated = await updateBrainDumpThought(thoughtId, {
+          text,
+          description,
+          link,
+        });
         setThoughts((prev) => prev.map((t) => (t._id === thoughtId ? updated : t)));
       } catch (error) {
         console.error("Failed to edit thought:", error);
       }
     });
+  };
+
+  const startEditThought = (thought: BrainDumpThoughtDTO) => {
+    setEditingThoughtId(thought._id);
+    setEditingText(thought.text);
+    setEditingDescription(thought.description ?? "");
+    setEditingLink(thought.link ?? "");
   };
 
   // Convert thought to task in today's sprint
@@ -416,54 +452,111 @@ export function BrainDumpWorkspace({
                         {categoryThoughts.map((thought) => (
                           <div
                             key={thought._id}
-                            className="group flex items-center justify-between px-6 py-3.5 hover:bg-white/50 dark:hover:bg-zinc-950/30 transition duration-150"
+                            className="group flex items-start justify-between gap-2 px-5 py-3.5 sm:px-6 hover:bg-white/50 dark:hover:bg-zinc-950/30 transition duration-150"
                           >
-                            <div className="flex flex-1 items-center gap-3 pr-4">
-                              <span className="size-1.5 rounded-full bg-zinc-400 shrink-0" />
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-zinc-400" />
                               {editingThoughtId === thought._id ? (
-                                <div className="flex flex-1 items-center gap-2">
+                                <div className="flex w-full min-w-0 flex-col gap-2">
                                   <input
                                     type="text"
                                     value={editingText}
                                     onChange={(e) => setEditingText(e.target.value)}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleSaveEdit(thought._id);
+                                      if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSaveEdit(thought._id);
+                                      }
                                       if (e.key === "Escape") setEditingThoughtId(null);
                                     }}
-                                    className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1 text-sm outline-none focus:border-violet-500 dark:focus:border-violet-500 text-zinc-900 dark:text-zinc-100"
+                                    placeholder="Thought"
+                                    className={thoughtFieldClass}
                                     autoFocus
                                   />
-                                  <button
-                                    onClick={() => handleSaveEdit(thought._id)}
-                                    className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition"
-                                  >
-                                    <Check className="size-4 stroke-[2.5]" />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingThoughtId(null)}
-                                    className="p-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition"
-                                  >
-                                    <X className="size-4" />
-                                  </button>
+                                  <textarea
+                                    value={editingDescription}
+                                    onChange={(e) => setEditingDescription(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Escape") setEditingThoughtId(null);
+                                    }}
+                                    placeholder="Description (optional)"
+                                    rows={2}
+                                    className={cn(thoughtFieldClass, "resize-none leading-relaxed")}
+                                  />
+                                  <div className="relative">
+                                    <Link2 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
+                                    <input
+                                      type="url"
+                                      value={editingLink}
+                                      onChange={(e) => setEditingLink(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleSaveEdit(thought._id);
+                                        }
+                                        if (e.key === "Escape") setEditingThoughtId(null);
+                                      }}
+                                      placeholder="Link (optional)"
+                                      className={cn(thoughtFieldClass, "pl-9")}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1.5 pt-0.5">
+                                    <button
+                                      onClick={() => handleSaveEdit(thought._id)}
+                                      disabled={!editingText.trim() || isPending}
+                                      className="inline-flex h-7 items-center gap-1 rounded-md bg-zinc-900 px-2.5 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:opacity-55 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                                    >
+                                      <Check className="size-3.5 stroke-[2.5]" />
+                                      Save
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingThoughtId(null)}
+                                      className="inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
                                 </div>
                               ) : (
-                                <span className="text-sm text-zinc-700 dark:text-zinc-300 break-words leading-relaxed">
-                                  {thought.text}
-                                </span>
+                                <div className="min-w-0 space-y-1 py-0.5">
+                                  <p className="text-sm leading-relaxed break-words text-zinc-800 dark:text-zinc-200">
+                                    {thought.text}
+                                  </p>
+                                  {thought.description ? (
+                                    <p className="text-xs leading-relaxed break-words text-zinc-500 dark:text-zinc-400">
+                                      {thought.description}
+                                    </p>
+                                  ) : null}
+                                  {thought.link ? (
+                                    <a
+                                      href={
+                                        thought.link.startsWith("http")
+                                          ? thought.link
+                                          : `https://${thought.link}`
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="group/link inline-flex max-w-full items-center gap-1.5 rounded-md text-xs font-medium text-violet-600 transition hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                                    >
+                                      <ExternalLink className="size-3 shrink-0 opacity-70" />
+                                      <span className="truncate underline-offset-2 group-hover/link:underline">
+                                        {formatLinkLabel(thought.link)}
+                                      </span>
+                                    </a>
+                                  ) : null}
+                                </div>
                               )}
                             </div>
 
                             {/* Hover Actions Menu */}
                             {editingThoughtId !== thought._id && (
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 ml-2">
+                              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
                                 {/* Edit button */}
                                 <button
-                                  onClick={() => {
-                                    setEditingThoughtId(thought._id);
-                                    setEditingText(thought.text);
-                                  }}
+                                  onClick={() => startEditThought(thought)}
                                   title="Edit Thought"
-                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition"
+                                  className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-300"
                                 >
                                   <Pencil className="size-4" />
                                 </button>
@@ -473,7 +566,7 @@ export function BrainDumpWorkspace({
                                   <DropdownMenu.Trigger asChild>
                                     <button
                                       title="Convert to Task"
-                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition"
+                                      className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-violet-600 dark:hover:bg-zinc-800/80 dark:hover:text-violet-400"
                                     >
                                       <CheckCircle2 className="size-4" />
                                     </button>
@@ -485,7 +578,7 @@ export function BrainDumpWorkspace({
                                       sideOffset={4}
                                       className="z-50 min-w-[12rem] overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 text-zinc-950 shadow-xl dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 animate-in fade-in-50 zoom-in-95 duration-100"
                                     >
-                                      <div className="px-2.5 py-1.5 text-[10px] font-bold tracking-wider uppercase text-zinc-400 dark:text-zinc-500 border-b border-zinc-100 dark:border-zinc-800/80 mb-1">
+                                      <div className="mb-1 border-b border-zinc-100 px-2.5 py-1.5 text-[10px] font-bold tracking-wider text-zinc-400 uppercase dark:border-zinc-800/80 dark:text-zinc-500">
                                         Select Target Category
                                       </div>
                                       {activeCategories.length > 0 ? (
@@ -493,9 +586,9 @@ export function BrainDumpWorkspace({
                                           <DropdownMenu.Item
                                             key={actCat.key}
                                             onSelect={() => handleConvertToTask(thought._id, actCat.key)}
-                                            className="flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 outline-none hover:bg-zinc-100 focus:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:focus:bg-zinc-900 transition"
+                                            className="flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 outline-none transition hover:bg-zinc-100 focus:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:focus:bg-zinc-900"
                                           >
-                                            <div className="size-4 flex items-center justify-center shrink-0">
+                                            <div className="flex size-4 shrink-0 items-center justify-center">
                                               {actCat.icon ? (
                                                 <DynamicIcon name={actCat.icon} className="size-3.5" />
                                               ) : (
@@ -506,7 +599,7 @@ export function BrainDumpWorkspace({
                                           </DropdownMenu.Item>
                                         ))
                                       ) : (
-                                        <div className="px-2.5 py-2 text-xs text-zinc-400 dark:text-zinc-500 text-center leading-normal max-w-[14rem]">
+                                        <div className="max-w-[14rem] px-2.5 py-2 text-center text-xs leading-normal text-zinc-400 dark:text-zinc-500">
                                           Create a category in Today&apos;s sprint first to send tasks there.
                                         </div>
                                       )}
@@ -519,7 +612,7 @@ export function BrainDumpWorkspace({
                                   <DropdownMenu.Trigger asChild>
                                     <button
                                       title="More Actions"
-                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 transition"
+                                      className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-300"
                                     >
                                       <MoreHorizontal className="size-4" />
                                     </button>
@@ -533,7 +626,7 @@ export function BrainDumpWorkspace({
                                     >
                                       <DropdownMenu.Item
                                         onSelect={() => handleDeleteThought(thought._id)}
-                                        className="flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 outline-none hover:bg-red-50 focus:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20 dark:focus:bg-red-950/20 transition"
+                                        className="flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 outline-none transition hover:bg-red-50 focus:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20 dark:focus:bg-red-950/20"
                                       >
                                         <Trash2 className="size-3.5" />
                                         Delete Thought
@@ -553,34 +646,66 @@ export function BrainDumpWorkspace({
                     )}
 
                     {/* Add Thought Block */}
-                    <div className="p-3 bg-white dark:bg-zinc-950/30">
+                    <div className="bg-white p-3 dark:bg-zinc-950/30">
                       {addingCategoryKey === category.key ? (
-                        <div className="flex items-center gap-2 max-w-2xl">
+                        <div className="mx-auto max-w-2xl space-y-2 rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-3 dark:border-zinc-800/80 dark:bg-zinc-900/40">
                           <input
                             type="text"
-                            placeholder="Type your thought..."
+                            placeholder="What's on your mind?"
                             value={addingText}
                             onChange={(e) => setAddingText(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") handleAddThought(category.key);
-                              if (e.key === "Escape") setAddingCategoryKey(null);
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleAddThought(category.key);
+                              }
+                              if (e.key === "Escape") resetAddForm();
                             }}
-                            className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-1.5 text-xs outline-none focus:border-violet-400 dark:focus:border-violet-600 focus:bg-white transition text-zinc-900 dark:text-zinc-100"
+                            className={thoughtFieldClass}
                             autoFocus
                           />
-                          <button
-                            onClick={() => handleAddThought(category.key)}
-                            disabled={!addingText.trim() || isPending}
-                            className="inline-flex h-7 items-center justify-center rounded-md bg-zinc-900 hover:bg-zinc-800 text-white disabled:opacity-55 text-xs font-medium px-3 transition dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                          >
-                            Add
-                          </button>
-                          <button
-                            onClick={() => setAddingCategoryKey(null)}
-                            className="inline-flex h-7 items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-500 text-xs font-medium px-2.5 transition dark:hover:bg-zinc-900"
-                          >
-                            Cancel
-                          </button>
+                          <textarea
+                            placeholder="Add a description (optional)"
+                            value={addingDescription}
+                            onChange={(e) => setAddingDescription(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") resetAddForm();
+                            }}
+                            rows={2}
+                            className={cn(thoughtFieldClass, "resize-none leading-relaxed")}
+                          />
+                          <div className="relative">
+                            <Link2 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
+                            <input
+                              type="url"
+                              placeholder="Add a link (optional)"
+                              value={addingLink}
+                              onChange={(e) => setAddingLink(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddThought(category.key);
+                                }
+                                if (e.key === "Escape") resetAddForm();
+                              }}
+                              className={cn(thoughtFieldClass, "pl-9")}
+                            />
+                          </div>
+                          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                            <button
+                              onClick={resetAddForm}
+                              className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleAddThought(category.key)}
+                              disabled={!addingText.trim() || isPending}
+                              className="inline-flex h-8 items-center justify-center rounded-lg bg-zinc-900 px-3.5 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-55 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                            >
+                              Add Thought
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <button
@@ -588,8 +713,10 @@ export function BrainDumpWorkspace({
                           onClick={() => {
                             setAddingCategoryKey(category.key);
                             setAddingText("");
+                            setAddingDescription("");
+                            setAddingLink("");
                           }}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-200 hover:border-violet-300 dark:border-zinc-800 dark:hover:border-violet-900 py-2.5 text-xs font-medium text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400 bg-white/40 hover:bg-violet-50/10 transition duration-150"
+                          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-200 bg-white/40 py-2.5 text-xs font-medium text-zinc-400 transition duration-150 hover:border-violet-300 hover:bg-violet-50/10 hover:text-violet-600 dark:border-zinc-800 dark:hover:border-violet-900 dark:hover:text-violet-400"
                         >
                           <Plus className="size-3.5 stroke-[2.5]" />
                           Add Thought

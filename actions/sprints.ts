@@ -19,7 +19,7 @@ import { Rule as RuleModel } from "@/models/Rule";
 import { Sprint } from "@/models/Sprint";
 import { Task } from "@/models/Task";
 import { BrainDumpThought } from "@/models/BrainDumpThought";
-import type { AnalyticsData, AnalyticsRange, Category, CategoryDTO, HabitStat, SprintDTO, RuleDTO, BrainDumpThoughtDTO } from "@/types/sprint";
+import type { AnalyticsData, AnalyticsRange, Category, CategoryDTO, HabitStat, SprintDTO, RuleDTO, BrainDumpThoughtDTO, BrainDumpThoughtInput } from "@/types/sprint";
 import { isoDate, formatSprintDate, parseLocalInputValueToUTC } from "@/utils/date";
 import { getServerTimeZone } from "@/utils/dateServer";
 import { calculateProductivity } from "@/utils/productivity";
@@ -962,11 +962,27 @@ export async function getBrainDumpThoughts(): Promise<BrainDumpThoughtDTO[]> {
   return docs.map(serializeBrainDumpThought);
 }
 
-export async function createBrainDumpThought(text: string, category: string): Promise<BrainDumpThoughtDTO> {
+function normalizeThoughtLink(link?: string): string {
+  const trimmed = (link ?? "").trim();
+  if (!trimmed) return "";
+  // Allow bare domains by prefixing https when no scheme is present
+  if (!/^https?:\/\//i.test(trimmed) && !trimmed.startsWith("/")) {
+    return `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
+export async function createBrainDumpThought(
+  text: string,
+  category: string,
+  extras?: Pick<BrainDumpThoughtInput, "description" | "link">
+): Promise<BrainDumpThoughtDTO> {
   await connectDB();
   const count = await BrainDumpThought.countDocuments({ category });
   const doc = await BrainDumpThought.create({
-    text,
+    text: text.trim(),
+    description: (extras?.description ?? "").trim(),
+    link: normalizeThoughtLink(extras?.link),
     category,
     order: count,
   });
@@ -974,9 +990,22 @@ export async function createBrainDumpThought(text: string, category: string): Pr
   return serializeBrainDumpThought(doc.toObject());
 }
 
-export async function updateBrainDumpThought(id: string, text: string): Promise<BrainDumpThoughtDTO> {
+export async function updateBrainDumpThought(
+  id: string,
+  input: string | BrainDumpThoughtInput
+): Promise<BrainDumpThoughtDTO> {
   await connectDB();
-  const doc = await BrainDumpThought.findByIdAndUpdate(id, { text }, { new: true }).lean();
+  // Support legacy string signature and full object updates
+  const payload =
+    typeof input === "string"
+      ? { text: input.trim() }
+      : {
+          text: input.text.trim(),
+          description: (input.description ?? "").trim(),
+          link: normalizeThoughtLink(input.link),
+        };
+
+  const doc = await BrainDumpThought.findByIdAndUpdate(id, payload, { new: true }).lean();
   if (!doc) throw new Error("Thought not found");
   revalidatePath("/brain-dump");
   return serializeBrainDumpThought(doc);
@@ -1003,9 +1032,12 @@ export async function convertThoughtToTask(thoughtId: string, targetCategory: st
     .lean();
   const nextOrder = maxOrderTask ? maxOrderTask.order + 1 : 0;
 
+  // Carry description/link over so nothing is lost when promoting a dump to a task
+  const descriptionParts = [thought.description?.trim(), thought.link?.trim()].filter(Boolean);
   await Task.create({
     sprintId: todaySprint._id,
     title: thought.text,
+    description: descriptionParts.join("\n"),
     category: targetCategory,
     completed: false,
     order: nextOrder,
