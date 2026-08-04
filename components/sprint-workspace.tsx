@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } f
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { AnimatePresence, motion } from "framer-motion";
 import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, List, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
@@ -932,32 +933,11 @@ function TaskItem({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"none" | "start-again" | "delete">("none");
-  const menuRef = useRef<HTMLDivElement>(null);
-  const deleteMenuRef = useRef<HTMLDivElement>(null);
   const hasPlan = Boolean(task.planStepCount) || Boolean(task.plan?.trim());
 
   useEffect(() => {
-    if (!menuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-        setConfirmMode("none");
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (!menuOpen) setConfirmMode("none");
   }, [menuOpen]);
-
-  useEffect(() => {
-    if (!deleteMenuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (deleteMenuRef.current && !deleteMenuRef.current.contains(event.target as Node)) {
-        setDeleteMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [deleteMenuOpen]);
 
   let statusIcon;
   if (isCompleted) {
@@ -1050,100 +1030,124 @@ function TaskItem({
     </>
   );
 
-  const moreMenu = (
-    <div ref={menuRef} className="relative inline-block text-left">
-      <button
-        title="Actions"
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="grid size-8 place-items-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-      >
-        <MoreVertical className="size-4" />
-      </button>
+  const menuItemClass =
+    "flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs outline-none transition hover:bg-zinc-100 focus:bg-zinc-100 data-[highlighted]:bg-zinc-100 dark:hover:bg-zinc-900 dark:focus:bg-zinc-900 dark:data-[highlighted]:bg-zinc-900";
 
-      {menuOpen && (
-        <div className="absolute right-0 z-20 mt-1.5 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950">
+  const moreMenu = (
+    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          title="Actions"
+          className="grid size-8 place-items-center rounded-full text-zinc-400 outline-none transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-violet-500 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+        >
+          <MoreVertical className="size-4" />
+        </button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          side="bottom"
+          sideOffset={6}
+          collisionPadding={12}
+          className="z-50 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 text-zinc-950 shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 animate-in fade-in-50 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 duration-100"
+        >
           {confirmMode === "none" && (
-            <div className="py-1">
+            <div className="py-0.5">
               {!isCompleted && (
                 <>
-                  <Link
-                    href={`/sprints/${task.sprintId}/tasks/${task._id}`}
-                    onClick={() => setMenuOpen(false)}
-                    onMouseEnter={() => prefetchTaskPlan(task._id)}
-                    onFocus={() => prefetchTaskPlan(task._id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
-                  >
-                    <List className="size-3.5" />
-                    Open Plan
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onEdit(task);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  <DropdownMenu.Item asChild>
+                    <Link
+                      href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                      onMouseEnter={() => prefetchTaskPlan(task._id)}
+                      onFocus={() => prefetchTaskPlan(task._id)}
+                      className={cn(menuItemClass, "text-emerald-700 dark:text-emerald-400")}
+                    >
+                      <List className="size-3.5" />
+                      Open Plan
+                    </Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => onEdit(task)}
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <Pencil className="size-3.5" />
                     Edit Task
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onUpdate(task._id, { highlight: !highlightTaskIds.includes(task._id) });
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() =>
+                      onUpdate(task._id, { highlight: !highlightTaskIds.includes(task._id) })
+                    }
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <Star className="size-3.5" />
                     {highlightTaskIds.includes(task._id) ? "Remove Highlight" : "Highlight"}
-                  </button>
+                  </DropdownMenu.Item>
                 </>
               )}
               {isCompleted && (
                 <>
-                  <Link
-                    href={`/sprints/${task.sprintId}/tasks/${task._id}`}
-                    onClick={() => setMenuOpen(false)}
-                    onMouseEnter={() => prefetchTaskPlan(task._id)}
-                    onFocus={() => prefetchTaskPlan(task._id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
-                  >
-                    <List className="size-3.5" />
-                    Open Plan
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setHistoryOpen(true);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  <DropdownMenu.Item asChild>
+                    <Link
+                      href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                      onMouseEnter={() => prefetchTaskPlan(task._id)}
+                      onFocus={() => prefetchTaskPlan(task._id)}
+                      className={cn(menuItemClass, "text-emerald-700 dark:text-emerald-400")}
+                    >
+                      <List className="size-3.5" />
+                      Open Plan
+                    </Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => setHistoryOpen(true)}
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <History className="size-3.5" />
                     View History
-                  </button>
-                  <button
-                    onClick={() => setConfirmMode("start-again")}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setConfirmMode("start-again");
+                    }}
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <RotateCcw className="size-3.5" />
                     Start Again
-                  </button>
+                  </DropdownMenu.Item>
                 </>
               )}
-              <button
-                onClick={() => setConfirmMode("delete")}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+              <DropdownMenu.Item
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setConfirmMode("delete");
+                }}
+                className={cn(menuItemClass, "font-medium text-red-600 dark:text-red-400")}
               >
                 <Trash2 className="size-3.5" />
                 Delete Task
-              </button>
+              </DropdownMenu.Item>
             </div>
           )}
           {confirmMode === "start-again" && (
             <div className="p-3">
               <p className="text-xs font-semibold">Start a new session?</p>
               <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setConfirmMode("none")} className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500">Cancel</button>
-                <button type="button" onClick={handleStartAgainConfirmed} className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Start Again</button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmMode("none")}
+                  className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartAgainConfirmed}
+                  className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                >
+                  Start Again
+                </button>
               </div>
             </div>
           )}
@@ -1152,14 +1156,26 @@ function TaskItem({
               <p className="text-xs font-semibold">Delete this task?</p>
               <p className="mt-1 text-[10px] text-zinc-400">This cannot be undone.</p>
               <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setConfirmMode("none")} className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500">Cancel</button>
-                <button type="button" onClick={handleDeleteConfirmed} className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Delete</button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmMode("none")}
+                  className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirmed}
+                  className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
-    </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 
   return (
@@ -1378,25 +1394,54 @@ function TaskItem({
                 activeColor="violet"
                 onClick={() => onEdit(task)}
               />
-              <div ref={deleteMenuRef} className="relative">
-                <TaskActionIcon
-                  icon={Trash2}
-                  tooltip="Delete"
-                  activeColor="red"
-                  hoverColor="red"
-                  active={deleteMenuOpen}
-                  onClick={() => setDeleteMenuOpen((v) => !v)}
-                />
-                {deleteMenuOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-1.5 w-52 space-y-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+              <DropdownMenu.Root open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    title="Delete"
+                    aria-label="Delete"
+                    className={cn(
+                      "grid size-8 place-items-center rounded-full transition outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1",
+                      deleteMenuOpen
+                        ? "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                        : "bg-transparent text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400",
+                    )}
+                  >
+                    <Trash2 className="size-4 stroke-[1.75]" />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    side="bottom"
+                    sideOffset={6}
+                    collisionPadding={12}
+                    className="z-50 w-52 space-y-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+                    onCloseAutoFocus={(event) => event.preventDefault()}
+                  >
                     <p className="text-xs font-semibold">Delete this task?</p>
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setDeleteMenuOpen(false)} className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500">Cancel</button>
-                      <button type="button" onClick={() => { setDeleteMenuOpen(false); onDelete(task._id); }} className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Delete</button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteMenuOpen(false)}
+                        className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteMenuOpen(false);
+                          onDelete(task._id);
+                        }}
+                        className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                      >
+                        Delete
+                      </button>
                     </div>
-                  </div>
-                )}
-              </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
               <Link
                 href={`/sprints/${task.sprintId}/tasks/${task._id}`}
                 title="Plan"
