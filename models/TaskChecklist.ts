@@ -2,6 +2,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 const TaskChecklistSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     taskId: {
       type: Schema.Types.ObjectId,
       ref: "Task",
@@ -14,7 +15,7 @@ const TaskChecklistSchema = new Schema(
   { timestamps: true, collection: "task_checklists" },
 );
 
-TaskChecklistSchema.index({ taskId: 1, orderIndex: 1 });
+TaskChecklistSchema.index({ userId: 1, taskId: 1, orderIndex: 1 });
 
 export type TaskChecklistDocument = InferSchemaType<typeof TaskChecklistSchema>;
 

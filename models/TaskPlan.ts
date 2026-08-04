@@ -5,6 +5,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
  */
 const TaskPlanSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     taskId: {
       type: Schema.Types.ObjectId,
       ref: "Task",
@@ -18,6 +19,8 @@ const TaskPlanSchema = new Schema(
   },
   { timestamps: true, collection: "task_plans" },
 );
+
+TaskPlanSchema.index({ userId: 1, taskId: 1 });
 
 export type TaskPlanDocument = InferSchemaType<typeof TaskPlanSchema>;
 

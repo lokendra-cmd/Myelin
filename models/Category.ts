@@ -2,7 +2,8 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 const CategorySchema = new Schema(
   {
-    key: { type: String, required: true, unique: true, index: true, trim: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    key: { type: String, required: true, trim: true },
     label: { type: String, required: true, trim: true },
     emoji: { type: String, default: "•" },
     tagline: { type: String, default: "" },
@@ -18,6 +19,9 @@ const CategorySchema = new Schema(
   },
   { timestamps: true },
 );
+
+CategorySchema.index({ userId: 1, key: 1 }, { unique: true });
+CategorySchema.index({ userId: 1, order: 1 });
 
 export type CategoryDocument = InferSchemaType<typeof CategorySchema>;
 

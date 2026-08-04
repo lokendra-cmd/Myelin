@@ -6,8 +6,9 @@ export function newHabitId(): string {
 }
 
 /** Backfill habitId on recurring tasks so renames don't break history. Groups by category+title when missing. */
-export async function ensureRecurringHabitIds(): Promise<void> {
+export async function ensureRecurringHabitIds(userId: string): Promise<void> {
   const missing = await Task.find({
+    userId,
     isRecurring: true,
     $or: [{ habitId: null }, { habitId: { $exists: false } }, { habitId: "" }],
   })
@@ -27,7 +28,7 @@ export async function ensureRecurringHabitIds(): Promise<void> {
   await Promise.all(
     Array.from(byKey.values()).map(async (ids) => {
       const habitId = newHabitId();
-      await Task.updateMany({ _id: { $in: ids } }, { $set: { habitId } });
+      await Task.updateMany({ _id: { $in: ids }, userId }, { $set: { habitId } });
     }),
   );
 }
