@@ -2,6 +2,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 const TaskPlanStepSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     planId: {
       type: Schema.Types.ObjectId,
       ref: "TaskPlan",
@@ -19,9 +20,7 @@ const TaskPlanStepSchema = new Schema(
   { timestamps: true, collection: "task_plan_steps" },
 );
 
-// Primary access: load all steps for a plan in display order.
-TaskPlanStepSchema.index({ planId: 1, orderIndex: 1 });
-// Completion toggles / counter sync helpers.
+TaskPlanStepSchema.index({ userId: 1, planId: 1, orderIndex: 1 });
 TaskPlanStepSchema.index({ planId: 1, isCompleted: 1 });
 
 export type TaskPlanStepDocument = InferSchemaType<typeof TaskPlanStepSchema>;

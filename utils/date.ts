@@ -171,6 +171,10 @@ export function getUTCTimestamp(date = new Date()): string {
 }
 
 export function greeting(timeZone = getUserTimeZone()): string {
+  return greetingParts(timeZone).text;
+}
+
+export function greetingParts(timeZone = getUserTimeZone()): { text: string; emoji: string } {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour: "numeric",
@@ -179,7 +183,7 @@ export function greeting(timeZone = getUserTimeZone()): string {
   let hour = Number(formatter.format(new Date()));
   if (hour === 24) hour = 0;
 
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return { text: "Good Morning", emoji: "👋" };
+  if (hour < 17) return { text: "Good Afternoon", emoji: "☀️" };
+  return { text: "Good Evening", emoji: "🌙" };
 }

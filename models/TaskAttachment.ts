@@ -2,6 +2,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 const TaskAttachmentSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     taskId: {
       type: Schema.Types.ObjectId,
       ref: "Task",
@@ -16,7 +17,7 @@ const TaskAttachmentSchema = new Schema(
   { timestamps: { createdAt: true, updatedAt: false }, collection: "task_attachments" },
 );
 
-TaskAttachmentSchema.index({ taskId: 1, createdAt: -1 });
+TaskAttachmentSchema.index({ userId: 1, taskId: 1, createdAt: -1 });
 
 export type TaskAttachmentDocument = InferSchemaType<typeof TaskAttachmentSchema>;
 

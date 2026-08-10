@@ -1,15 +1,19 @@
 import { Dashboard } from "@/components/dashboard";
 import { getDashboardData } from "@/actions/sprints";
 import { Card } from "@/components/ui/card";
+import { requireUser } from "@/lib/session";
 import { getServerTimeZone } from "@/utils/dateServer";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   try {
-    const data = await getDashboardData();
-    const tz = await getServerTimeZone();
-    return <Dashboard data={data} timeZone={tz} />;
+    const [data, tz, user] = await Promise.all([
+      getDashboardData(),
+      getServerTimeZone(),
+      requireUser(),
+    ]);
+    return <Dashboard data={data} timeZone={tz} userName={user.name} />;
   } catch (error) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-20">

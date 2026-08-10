@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Flame, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import type { TaskDTO } from "@/types/sprint";
 
@@ -25,18 +26,9 @@ export function MealItem({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!menuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-        setConfirmDelete(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (!menuOpen) setConfirmDelete(false);
   }, [menuOpen]);
 
   return (
@@ -57,36 +49,43 @@ export function MealItem({
         </div>
       </div>
 
-      <div ref={menuRef} className="relative shrink-0">
-        <button
-          title="Actions"
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="grid size-8 place-items-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-        >
-          <MoreVertical className="size-4" />
-        </button>
-
-        {menuOpen && (
-          <div className="absolute right-0 z-20 mt-1.5 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950">
+      <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            title="Actions"
+            className="grid size-8 shrink-0 place-items-center rounded-full text-zinc-400 outline-none transition hover:bg-zinc-100 hover:text-zinc-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+          >
+            <MoreVertical className="size-4" />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            side="bottom"
+            sideOffset={6}
+            collisionPadding={12}
+            className="z-50 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950"
+          >
             {!confirmDelete ? (
-              <div className="py-1">
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onEdit(task);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              <div className="py-0.5">
+                <DropdownMenu.Item
+                  onSelect={() => onEdit(task)}
+                  className="flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 outline-none hover:bg-zinc-100 focus:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
                 >
                   <Pencil className="size-3.5" />
                   Edit Meal
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setConfirmDelete(true);
+                  }}
+                  className="flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-red-600 outline-none hover:bg-red-50 focus:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
                 >
                   <Trash2 className="size-3.5" />
                   Delete Meal
-                </button>
+                </DropdownMenu.Item>
               </div>
             ) : (
               <div className="p-3">
@@ -113,9 +112,9 @@ export function MealItem({
                 </div>
               </div>
             )}
-          </div>
-        )}
-      </div>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 }

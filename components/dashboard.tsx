@@ -9,7 +9,15 @@ import { prettyDate, greeting, formatSprintDate, isoDate } from "@/utils/date";
 import { productivityMood } from "@/utils/productivity";
 import { cn } from "@/lib/utils";
 
-export function Dashboard({ data, timeZone }: { data: DashboardData; timeZone: string }) {
+export function Dashboard({
+  data,
+  timeZone,
+  userName,
+}: {
+  data: DashboardData;
+  timeZone: string;
+  userName: string;
+}) {
   const today = data.today;
   const todayDate = isoDate(undefined, timeZone);
   const highlightTasks = today?.tasks.filter((task) => today.highlightTaskIds.includes(task._id)) ?? [];
@@ -29,10 +37,7 @@ export function Dashboard({ data, timeZone }: { data: DashboardData; timeZone: s
           <div>
             <p className="hidden text-sm text-zinc-500 lg:block">{prettyDate(new Date(), "long", timeZone)}</p>
             <h1 className="text-[1.75rem] font-bold leading-tight tracking-tight sm:text-4xl sm:font-semibold">
-              {greeting(timeZone)}, Lokendra{" "}
-              <span aria-hidden className="lg:hidden">
-                👋
-              </span>
+              {greeting(timeZone)}, {userName}
             </h1>
             <p className="mt-1.5 text-sm text-zinc-500 lg:hidden">Let&apos;s keep the momentum going.</p>
           </div>

@@ -6,6 +6,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
  */
 const TaskSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     sprintId: { type: Schema.Types.ObjectId, ref: "Sprint", required: true, index: true },
     title: { type: String, required: true, trim: true },
     /** Short task description shown on the Plan page header. */
@@ -57,10 +58,9 @@ const TaskSchema = new Schema(
   { timestamps: true },
 );
 
-// Matches the common access pattern: fetch a sprint's tasks sorted by
-// category then order. Also serves the batched { sprintId: { $in } } loads.
-TaskSchema.index({ sprintId: 1, category: 1, order: 1 });
-TaskSchema.index({ sprintId: 1, favorite: -1, order: 1 });
+TaskSchema.index({ userId: 1, sprintId: 1, category: 1, order: 1 });
+TaskSchema.index({ userId: 1, sprintId: 1, favorite: -1, order: 1 });
+TaskSchema.index({ userId: 1, habitId: 1 });
 
 export type TaskDocument = InferSchemaType<typeof TaskSchema>;
 

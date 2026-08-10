@@ -8,6 +8,7 @@ import { BarChart3, CalendarDays, Command, Home, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/command-palette";
 import { NewSprintButton } from "@/components/new-sprint-button";
+import { SignOutButton } from "@/components/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/store";
@@ -147,8 +148,10 @@ function NavigationProgress() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const setCommandOpen = useUIStore((state) => state.setCommandOpen);
+  const isAuthPage = pathname === "/login" || pathname === "/register";
 
   useEffect(() => {
+    if (isAuthPage) return;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const getCookie = (name: string) => {
       const value = `; ${document.cookie}`;
@@ -160,7 +163,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       document.cookie = `timezone=${encodeURIComponent(tz)}; path=/; max-age=31536000; SameSite=Lax`;
       window.location.reload();
     }
-  }, []);
+  }, [isAuthPage]);
+
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f7f7f5] text-zinc-950 dark:bg-[#090909] dark:text-zinc-50">
@@ -193,6 +200,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Command className="size-4" />
             </Button>
             <ThemeToggle />
+            <SignOutButton />
             <span className="hidden md:inline-flex">
               <NewSprintButton size="sm" />
             </span>

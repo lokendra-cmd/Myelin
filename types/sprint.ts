@@ -158,8 +158,16 @@ export type DashboardData = {
 export type BrainDumpThoughtDTO = {
   _id: string;
   text: string;
+  description: string;
+  link: string;
   category: string;
   order: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type BrainDumpThoughtInput = {
+  text: string;
+  description?: string;
+  link?: string;
 };
