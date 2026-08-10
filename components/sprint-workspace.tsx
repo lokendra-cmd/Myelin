@@ -4,10 +4,15 @@ import { useEffect, useMemo, useRef, useState, useTransition, type RefObject } f
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import * as Dialog from "@radix-ui/react-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { AnimatePresence, motion } from "framer-motion";
-import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
+import { Activity, ArrowDownToLine, ArrowLeft, Calendar, CalendarClock, Check, ChevronDown, CircleDot, FileDown, FileText, GripVertical, History, List, MoreVertical, Pencil, Play, Plus, Repeat, RotateCcw, ShieldCheck, Sparkles, Star, Trash2 } from "lucide-react";
 import { TaskActionIcon } from "@/components/tasks/TaskActionIcon";
 import { TaskModal } from "@/components/tasks/TaskModal";
+import { MealModal } from "@/components/tasks/MealModal";
+import { MealItem } from "@/components/tasks/MealItem";
+import { NutritionSummary } from "@/components/nutrition-summary";
+import { prefetchTaskPlan } from "@/components/task-plan/task-plan-page";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +38,7 @@ import {
   getUTCTimestamp
 } from "@/utils/date";
 import { productivityMood } from "@/utils/productivity";
+import { sumNutrition } from "@/lib/nutrition";
 
 type DeadlineDraft = {
   enabled: boolean;
@@ -83,8 +89,11 @@ export function SprintWorkspace({
   const [addTaskCategory, setAddTaskCategory] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const firstInput = useRef<HTMLInputElement | null>(null);
+  const categoryDragKeysRef = useRef<string[] | null>(null);
+  const draggingCategoryRef = useRef<string | null>(null);
   const highlightTasks = sprint.tasks.filter((task) => sprint.highlightTaskIds.includes(task._id));
   const mood = productivityMood(sprint.productivity);
 
@@ -272,6 +281,19 @@ export function SprintWorkspace({
     }, {} as Record<Category, TaskDTO[]>);
   }, [sprint.tasks, visibleCategories]);
 
+  const dailyNutritionTotals = useMemo(() => {
+    const mealTasks = sprint.tasks.filter((task) => {
+      const cat = categories.find((c) => c.key === task.category);
+      return cat?.isCaloriesTracker;
+    });
+    return sumNutrition(mealTasks);
+  }, [sprint.tasks, categories]);
+
+  const hasCaloriesTracker = useMemo(
+    () => categories.some((c) => c.isCaloriesTracker),
+    [categories],
+  );
+
   function onDrop(category: Category, targetId?: string) {
     if (!dragging) return;
     const moved = sprint.tasks.find((task) => task._id === dragging);
@@ -291,6 +313,54 @@ export function SprintWorkspace({
     startTransition(() => {
       void mutate(`/api/sprints/${sprint._id}`, { method: "PUT", body: JSON.stringify({ taskIds }) });
       if (moved.category !== category) updateTask(moved._id, { category });
+    });
+  }
+
+  function onCategoryDragStart(key: string) {
+    setDragging(null);
+    draggingCategoryRef.current = key;
+    setDraggingCategory(key);
+    categoryDragKeysRef.current = null;
+  }
+
+  function onCategoryDragOver(overKey: string) {
+    const activeKey = draggingCategoryRef.current;
+    if (!activeKey || activeKey === overKey) return;
+    setCategories((current) => {
+      const sortable = current.filter((c) => !c.isBrainDump);
+      const from = sortable.findIndex((c) => c.key === activeKey);
+      const to = sortable.findIndex((c) => c.key === overKey);
+      if (from < 0 || to < 0 || from === to) return current;
+      const next = [...sortable];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      const orderMap = new Map(next.map((c, i) => [c.key, i]));
+      categoryDragKeysRef.current = next.map((c) => c.key);
+      return current.map((c) => (orderMap.has(c.key) ? { ...c, order: orderMap.get(c.key)! } : c));
+    });
+  }
+
+  function onCategoryDragEnd() {
+    const keys = categoryDragKeysRef.current;
+    draggingCategoryRef.current = null;
+    setDraggingCategory(null);
+    categoryDragKeysRef.current = null;
+    if (!keys?.length) return;
+    startTransition(() => {
+      void (async () => {
+        try {
+          const res = await fetch("/api/categories", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ categoryKeys: keys }),
+          });
+          if (!res.ok) return;
+          const updated = (await res.json()) as CategoryDTO[];
+          setCategories(updated);
+        } catch {
+          // Keep optimistic order; next refresh will reconcile.
+        }
+      })();
     });
   }
 
@@ -319,8 +389,18 @@ export function SprintWorkspace({
               {sprint.completedTasks} / {sprint.totalTasks}
             </span>
           </div>
+          {hasCaloriesTracker && dailyNutritionTotals.calories > 0 && (
+            <div className="mt-3 lg:mt-4">
+              <NutritionSummary totals={dailyNutritionTotals} variant="inline" className="justify-center lg:w-full" />
+            </div>
+          )}
         </div>
       </div>
+      {hasCaloriesTracker && (
+        <div className="mt-4">
+          <NutritionSummary totals={dailyNutritionTotals} variant="panel" />
+        </div>
+      )}
     </Card>
   );
 
@@ -557,10 +637,16 @@ export function SprintWorkspace({
                     tagline: editingCategory.tagline || "",
                     icon: editingCategory.icon || "",
                     isBrainDump: !!editingCategory.isBrainDump,
+                    isCaloriesTracker: !!editingCategory.isCaloriesTracker,
+                    targetCalories: editingCategory.targetCalories ?? undefined,
+                    targetProtein: editingCategory.targetProtein ?? undefined,
+                    targetFat: editingCategory.targetFat ?? undefined,
+                    targetCarbs: editingCategory.targetCarbs ?? undefined,
                   }
                 : null
             }
             onSubmit={async (values) => {
+              const useTargets = !!values.isCaloriesTracker;
               if (editingCategory) {
                 const body = {
                   label: values.label,
@@ -568,6 +654,11 @@ export function SprintWorkspace({
                   icon: values.icon,
                   themeId: editingCategory.themeId || hashTheme(values.label).id,
                   isBrainDump: !!values.isBrainDump,
+                  isCaloriesTracker: !!values.isCaloriesTracker,
+                  targetCalories: useTargets ? (values.targetCalories ?? null) : null,
+                  targetProtein: useTargets ? (values.targetProtein ?? null) : null,
+                  targetFat: useTargets ? (values.targetFat ?? null) : null,
+                  targetCarbs: useTargets ? (values.targetCarbs ?? null) : null,
                 };
                 const res = await fetch(`/api/categories/${encodeURIComponent(editingCategory.key)}`, {
                   method: "PATCH",
@@ -587,6 +678,11 @@ export function SprintWorkspace({
                           icon: updated.icon,
                           themeId: updated.themeId,
                           isBrainDump: updated.isBrainDump,
+                          isCaloriesTracker: updated.isCaloriesTracker,
+                          targetCalories: updated.targetCalories,
+                          targetProtein: updated.targetProtein,
+                          targetFat: updated.targetFat,
+                          targetCarbs: updated.targetCarbs,
                         }
                       : cat
                   )
@@ -599,6 +695,11 @@ export function SprintWorkspace({
                   icon: values.icon,
                   themeId: hashTheme(values.label).id,
                   isBrainDump: !!values.isBrainDump,
+                  isCaloriesTracker: !!values.isCaloriesTracker,
+                  targetCalories: useTargets ? (values.targetCalories ?? null) : null,
+                  targetProtein: useTargets ? (values.targetProtein ?? null) : null,
+                  targetFat: useTargets ? (values.targetFat ?? null) : null,
+                  targetCarbs: useTargets ? (values.targetCarbs ?? null) : null,
                 };
                 const res = await fetch("/api/categories", {
                   method: "POST",
@@ -678,34 +779,69 @@ export function SprintWorkspace({
             }}
           />
 
-          {/* Edit Task Modal */}
-          {editingTask && (
-            <TaskModal
-              mode="edit"
-              open={!!editingTask}
-              onOpenChange={(open) => { if (!open) setEditingTask(null); }}
-              task={editingTask}
-              onSaved={(taskId, updates) => {
-                updateTask(taskId, updates);
-                setEditingTask(null);
-              }}
-            />
-          )}
+          {/* Edit Task / Meal Modal */}
+          {editingTask && (() => {
+            const editCategory = categories.find((c) => c.key === editingTask.category);
+            if (editCategory?.isCaloriesTracker) {
+              return (
+                <MealModal
+                  mode="edit"
+                  open={!!editingTask}
+                  onOpenChange={(open) => { if (!open) setEditingTask(null); }}
+                  task={editingTask}
+                  onSaved={(taskId, updates) => {
+                    updateTask(taskId, updates);
+                    setEditingTask(null);
+                  }}
+                />
+              );
+            }
+            return (
+              <TaskModal
+                mode="edit"
+                open={!!editingTask}
+                onOpenChange={(open) => { if (!open) setEditingTask(null); }}
+                task={editingTask}
+                onSaved={(taskId, updates) => {
+                  updateTask(taskId, updates);
+                  setEditingTask(null);
+                }}
+              />
+            );
+          })()}
 
-          {/* Add Task Modal (per-category) */}
-          {addTaskCategory && (
-            <TaskModal
-              mode="create"
-              open={!!addTaskCategory}
-              onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
-              category={addTaskCategory}
-              sprintId={sprint._id}
-              onCreated={(updatedSprint) => {
-                setSprint(updatedSprint);
-                setAddTaskCategory(null);
-              }}
-            />
-          )}
+          {/* Add Task / Meal Modal (per-category) */}
+          {addTaskCategory && (() => {
+            const addCategory = categories.find((c) => c.key === addTaskCategory);
+            if (addCategory?.isCaloriesTracker) {
+              return (
+                <MealModal
+                  mode="create"
+                  open={!!addTaskCategory}
+                  onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
+                  category={addTaskCategory}
+                  sprintId={sprint._id}
+                  onCreated={(updatedSprint) => {
+                    setSprint(updatedSprint);
+                    setAddTaskCategory(null);
+                  }}
+                />
+              );
+            }
+            return (
+              <TaskModal
+                mode="create"
+                open={!!addTaskCategory}
+                onOpenChange={(open) => { if (!open) setAddTaskCategory(null); }}
+                category={addTaskCategory}
+                sprintId={sprint._id}
+                onCreated={(updatedSprint) => {
+                  setSprint(updatedSprint);
+                  setAddTaskCategory(null);
+                }}
+              />
+            );
+          })()}
 
           <div className="min-w-0 space-y-3 sm:space-y-6">
             {visibleCategories.map((category, index) => (
@@ -717,6 +853,8 @@ export function SprintWorkspace({
                 draft={draft[category.key] ?? ""}
                 deadlineDraft={deadlineDraft[category.key] ?? defaultDeadlineDraft(category.key, timeZone)}
                 dragging={dragging}
+                draggingCategory={draggingCategory}
+                canReorderCategory={categories.some((c) => c.key === category.key && !c.isBrainDump)}
                 onDraft={(value) => setDraft((current) => ({ ...current, [category.key]: value }))}
                 onDeadlineDraft={(value) => setDeadlineDraft((current) => ({ ...current, [category.key]: value }))}
                 onAdd={() => add(category.key)}
@@ -729,6 +867,9 @@ export function SprintWorkspace({
                 onEdit={setEditingTask}
                 onDrag={setDragging}
                 onDrop={onDrop}
+                onCategoryDragStart={onCategoryDragStart}
+                onCategoryDragOver={onCategoryDragOver}
+                onCategoryDragEnd={onCategoryDragEnd}
                 highlightTaskIds={sprint.highlightTaskIds}
                 pending={isPending}
                 activeMenuId={activeMenuId}
@@ -792,31 +933,11 @@ function TaskItem({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"none" | "start-again" | "delete">("none");
-  const menuRef = useRef<HTMLDivElement>(null);
-  const deleteMenuRef = useRef<HTMLDivElement>(null);
+  const hasPlan = Boolean(task.planStepCount) || Boolean(task.plan?.trim());
 
   useEffect(() => {
-    if (!menuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-        setConfirmMode("none");
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (!menuOpen) setConfirmMode("none");
   }, [menuOpen]);
-
-  useEffect(() => {
-    if (!deleteMenuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (deleteMenuRef.current && !deleteMenuRef.current.contains(event.target as Node)) {
-        setDeleteMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [deleteMenuOpen]);
 
   let statusIcon;
   if (isCompleted) {
@@ -909,80 +1030,124 @@ function TaskItem({
     </>
   );
 
-  const moreMenu = (
-    <div ref={menuRef} className="relative inline-block text-left">
-      <button
-        title="Actions"
-        onClick={() => setMenuOpen(!menuOpen)}
-        className="grid size-8 place-items-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-      >
-        <MoreVertical className="size-4" />
-      </button>
+  const menuItemClass =
+    "flex w-full cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs outline-none transition hover:bg-zinc-100 focus:bg-zinc-100 data-[highlighted]:bg-zinc-100 dark:hover:bg-zinc-900 dark:focus:bg-zinc-900 dark:data-[highlighted]:bg-zinc-900";
 
-      {menuOpen && (
-        <div className="absolute right-0 z-20 mt-1.5 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950">
+  const moreMenu = (
+    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          title="Actions"
+          className="grid size-8 place-items-center rounded-full text-zinc-400 outline-none transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-violet-500 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+        >
+          <MoreVertical className="size-4" />
+        </button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          side="bottom"
+          sideOffset={6}
+          collisionPadding={12}
+          className="z-50 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 text-zinc-950 shadow-xl ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 animate-in fade-in-50 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 duration-100"
+        >
           {confirmMode === "none" && (
-            <div className="py-1">
+            <div className="py-0.5">
               {!isCompleted && (
                 <>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onEdit(task);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  <DropdownMenu.Item asChild>
+                    <Link
+                      href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                      onMouseEnter={() => prefetchTaskPlan(task._id)}
+                      onFocus={() => prefetchTaskPlan(task._id)}
+                      className={cn(menuItemClass, "text-emerald-700 dark:text-emerald-400")}
+                    >
+                      <List className="size-3.5" />
+                      Open Plan
+                    </Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => onEdit(task)}
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <Pencil className="size-3.5" />
                     Edit Task
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onUpdate(task._id, { highlight: !highlightTaskIds.includes(task._id) });
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() =>
+                      onUpdate(task._id, { highlight: !highlightTaskIds.includes(task._id) })
+                    }
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <Star className="size-3.5" />
                     {highlightTaskIds.includes(task._id) ? "Remove Highlight" : "Highlight"}
-                  </button>
+                  </DropdownMenu.Item>
                 </>
               )}
               {isCompleted && (
                 <>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setHistoryOpen(true);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  <DropdownMenu.Item asChild>
+                    <Link
+                      href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                      onMouseEnter={() => prefetchTaskPlan(task._id)}
+                      onFocus={() => prefetchTaskPlan(task._id)}
+                      className={cn(menuItemClass, "text-emerald-700 dark:text-emerald-400")}
+                    >
+                      <List className="size-3.5" />
+                      Open Plan
+                    </Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => setHistoryOpen(true)}
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <History className="size-3.5" />
                     View History
-                  </button>
-                  <button
-                    onClick={() => setConfirmMode("start-again")}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      setConfirmMode("start-again");
+                    }}
+                    className={cn(menuItemClass, "text-zinc-700 dark:text-zinc-300")}
                   >
                     <RotateCcw className="size-3.5" />
                     Start Again
-                  </button>
+                  </DropdownMenu.Item>
                 </>
               )}
-              <button
-                onClick={() => setConfirmMode("delete")}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+              <DropdownMenu.Item
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setConfirmMode("delete");
+                }}
+                className={cn(menuItemClass, "font-medium text-red-600 dark:text-red-400")}
               >
                 <Trash2 className="size-3.5" />
                 Delete Task
-              </button>
+              </DropdownMenu.Item>
             </div>
           )}
           {confirmMode === "start-again" && (
             <div className="p-3">
               <p className="text-xs font-semibold">Start a new session?</p>
               <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setConfirmMode("none")} className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500">Cancel</button>
-                <button type="button" onClick={handleStartAgainConfirmed} className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Start Again</button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmMode("none")}
+                  className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartAgainConfirmed}
+                  className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                >
+                  Start Again
+                </button>
               </div>
             </div>
           )}
@@ -991,14 +1156,26 @@ function TaskItem({
               <p className="text-xs font-semibold">Delete this task?</p>
               <p className="mt-1 text-[10px] text-zinc-400">This cannot be undone.</p>
               <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setConfirmMode("none")} className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500">Cancel</button>
-                <button type="button" onClick={handleDeleteConfirmed} className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Delete</button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmMode("none")}
+                  className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirmed}
+                  className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
-    </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 
   return (
@@ -1006,7 +1183,10 @@ function TaskItem({
       {!isDesktop && isFeaturedMobile && (
         <motion.div
           layout
-          className="min-w-0 overflow-hidden rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+          className={cn(
+            "relative min-w-0 rounded-2xl border border-zinc-200/90 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950",
+            menuOpen ? "z-30 overflow-visible" : "overflow-hidden",
+          )}
         >
           <div className="flex min-w-0 items-start gap-3">
             {statusIcon}
@@ -1069,7 +1249,8 @@ function TaskItem({
         <motion.div
           layout
           className={cn(
-            "min-w-0 overflow-hidden rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-zinc-950",
+            "relative min-w-0 rounded-2xl border bg-white p-3.5 shadow-sm dark:bg-zinc-950",
+            menuOpen ? "z-30 overflow-visible" : "overflow-hidden",
             isCompleted
               ? "border-emerald-100/70 dark:border-emerald-950/30"
               : "border-zinc-200/90 dark:border-zinc-800",
@@ -1125,14 +1306,15 @@ function TaskItem({
           onDrop(category.key, task._id);
         }}
         className={cn(
-          "group relative flex min-w-0 flex-row items-center justify-between gap-4 overflow-hidden rounded-xl border p-4 shadow-sm transition hover:shadow-md",
+          "group relative flex min-w-0 flex-row items-center justify-between gap-4 rounded-xl border p-4 shadow-sm transition hover:shadow-md",
+          deleteMenuOpen || menuOpen ? "z-30 overflow-visible" : "overflow-hidden",
           isCompleted
             ? "border-emerald-100/50 bg-emerald-50/10 dark:border-emerald-950/20 dark:bg-emerald-950/5"
             : "border-zinc-200/80 bg-white/80 dark:border-zinc-800 dark:bg-zinc-950/70",
           dragging === task._id && "opacity-40",
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           <div className="cursor-grab text-zinc-300 hover:text-zinc-500 dark:text-zinc-700 shrink-0">
             <GripVertical className="size-4" />
           </div>
@@ -1212,25 +1394,70 @@ function TaskItem({
                 activeColor="violet"
                 onClick={() => onEdit(task)}
               />
-              <div ref={deleteMenuRef} className="relative">
-                <TaskActionIcon
-                  icon={Trash2}
-                  tooltip="Delete"
-                  activeColor="red"
-                  hoverColor="red"
-                  active={deleteMenuOpen}
-                  onClick={() => setDeleteMenuOpen((v) => !v)}
-                />
-                {deleteMenuOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-1.5 w-52 space-y-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+              <DropdownMenu.Root open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    type="button"
+                    title="Delete"
+                    aria-label="Delete"
+                    className={cn(
+                      "grid size-8 place-items-center rounded-full transition outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1",
+                      deleteMenuOpen
+                        ? "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400"
+                        : "bg-transparent text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400",
+                    )}
+                  >
+                    <Trash2 className="size-4 stroke-[1.75]" />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    side="bottom"
+                    sideOffset={6}
+                    collisionPadding={12}
+                    className="z-50 w-52 space-y-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+                    onCloseAutoFocus={(event) => event.preventDefault()}
+                  >
                     <p className="text-xs font-semibold">Delete this task?</p>
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setDeleteMenuOpen(false)} className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500">Cancel</button>
-                      <button type="button" onClick={() => { setDeleteMenuOpen(false); onDelete(task._id); }} className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white">Delete</button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteMenuOpen(false)}
+                        className="rounded-md px-2.5 py-1.5 text-[11px] text-zinc-500"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteMenuOpen(false);
+                          onDelete(task._id);
+                        }}
+                        className="rounded-md bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                      >
+                        Delete
+                      </button>
                     </div>
-                  </div>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              <Link
+                href={`/sprints/${task.sprintId}/tasks/${task._id}`}
+                title="Plan"
+                onMouseEnter={() => prefetchTaskPlan(task._id)}
+                onFocus={() => prefetchTaskPlan(task._id)}
+                className={cn(
+                  "ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition",
+                  hasPlan
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-950/60"
+                    : "border-emerald-100/80 bg-emerald-50/60 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40",
                 )}
-              </div>
+              >
+                <List className="size-3.5 stroke-[2]" />
+                Plan
+              </Link>
+              {moreMenu}
             </div>
           ) : (
             moreMenu
@@ -1306,6 +1533,8 @@ function TaskSection(props: {
   deadlineDraft: DeadlineDraft;
   firstInput?: RefObject<HTMLInputElement | null>;
   dragging: string | null;
+  draggingCategory: string | null;
+  canReorderCategory: boolean;
   highlightTaskIds: string[];
   pending: boolean;
   activeMenuId: string | null;
@@ -1322,6 +1551,9 @@ function TaskSection(props: {
   onEdit: (task: TaskDTO) => void;
   onDrag: (taskId: string | null) => void;
   onDrop: (category: Category, targetId?: string) => void;
+  onCategoryDragStart: (key: string) => void;
+  onCategoryDragOver: (key: string) => void;
+  onCategoryDragEnd: () => void;
   debouncedTaskTitle: (taskId: string, title: string) => void;
   onConfigureRecurring: (task: TaskDTO) => void;
   timeZone: string;
@@ -1331,13 +1563,32 @@ function TaskSection(props: {
     ? getThemeById(props.category.themeId)
     : hashTheme(props.category._id);
   const hasIcon = Boolean(props.category.icon);
+  const isCaloriesTracker = Boolean(props.category.isCaloriesTracker);
   const pendingCount = props.tasks.filter((t) => !t.completed).length;
+  const nutritionTotals = sumNutrition(props.tasks);
+  const isCategoryDragging = props.draggingCategory === props.category.key;
 
   const [editingName, setEditingName] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
 
   return (
-    <Card className={cn("min-w-0 overflow-hidden rounded-2xl ring-1", theme.ring)} onDragOver={(event) => event.preventDefault()} onDrop={() => props.onDrop(props.category.key)}>
+    <motion.div layout transition={{ type: "spring", stiffness: 380, damping: 34, mass: 0.8 }}>
+    <Card
+      className={cn(
+        "min-w-0 overflow-hidden rounded-2xl ring-1 transition",
+        theme.ring,
+        isCategoryDragging && "opacity-45 ring-2 ring-emerald-400/50",
+        props.draggingCategory && !isCategoryDragging && "ring-emerald-300/30",
+      )}
+      onDragOver={(event) => {
+        event.preventDefault();
+        if (props.draggingCategory) props.onCategoryDragOver(props.category.key);
+      }}
+      onDrop={() => {
+        if (props.draggingCategory) return;
+        props.onDrop(props.category.key);
+      }}
+    >
       {/* ── Themed banner header ────────────────────────────────────── */}
       <div className={cn("bg-gradient-to-br px-3 py-3 sm:px-4 sm:pt-4 sm:pb-3", theme.gradient, theme.darkGradient)}>
         <div
@@ -1352,8 +1603,31 @@ function TaskSection(props: {
           aria-expanded={!collapsed}
           aria-controls={`category-body-${props.category.key}`}
         >
-          {/* Left: icon + meta */}
-          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          {/* Left: grip + icon + meta */}
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            {props.canReorderCategory ? (
+              <button
+                type="button"
+                title="Drag to reorder"
+                aria-label={`Reorder ${props.category.label}`}
+                draggable
+                onDragStart={(event) => {
+                  event.stopPropagation();
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", props.category.key);
+                  props.onCategoryDragStart(props.category.key);
+                }}
+                onDragEnd={() => props.onCategoryDragEnd()}
+                onClick={(event) => event.stopPropagation()}
+                className={cn(
+                  "mt-0.5 grid size-8 shrink-0 cursor-grab place-items-center rounded-lg transition active:cursor-grabbing",
+                  theme.accentText,
+                  "opacity-50 hover:bg-white/25 hover:opacity-100 dark:hover:bg-black/20",
+                )}
+              >
+                <GripVertical className="size-4" />
+              </button>
+            ) : null}
             {/* Circular icon */}
             <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full border border-white/40 shadow-sm sm:size-11", theme.accentBg)}>
               {hasIcon
@@ -1380,15 +1654,30 @@ function TaskSection(props: {
                 ) : (
                   <h2 className={cn("truncate text-sm font-bold", theme.accentText)}>{props.category.label}</h2>
                 )}
-                {/* Pending badge */}
+                {/* Status badge */}
                 <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", theme.badge)}>
-                  {pendingCount} pending
+                  {isCaloriesTracker
+                    ? `${props.tasks.length} meal${props.tasks.length === 1 ? "" : "s"}`
+                    : `${pendingCount} pending`}
                 </span>
               </div>
               {props.category.tagline && (
                 <p className={cn("mt-0.5 hidden truncate text-[11px] italic opacity-75 sm:block", theme.accentText)}>
                   &quot;{props.category.tagline}&quot;
                 </p>
+              )}
+              {isCaloriesTracker && collapsed && (
+                <NutritionSummary
+                  totals={nutritionTotals}
+                  targets={{
+                    calories: props.category.targetCalories ?? 0,
+                    protein: props.category.targetProtein ?? 0,
+                    fat: props.category.targetFat ?? 0,
+                    carbs: props.category.targetCarbs ?? 0,
+                  }}
+                  variant="banner"
+                  accentText={theme.accentText}
+                />
               )}
             </div>
           </div>
@@ -1428,40 +1717,60 @@ function TaskSection(props: {
             style={{ overflow: "hidden" }}
           >
             <div className="p-3 sm:p-4">
+              {isCaloriesTracker && (
+                <div className="mb-3">
+                  <NutritionSummary totals={nutritionTotals} variant="panel" />
+                </div>
+              )}
               <div className="min-w-0 space-y-2.5">
-                {props.tasks.map((task) => (
-                  <TaskItem
-                    key={task._id}
-                    task={task}
-                    category={props.category}
-                    highlightTaskIds={props.highlightTaskIds}
-                    onUpdate={props.onUpdate}
-                    onDelete={props.onDelete}
-                    onEdit={props.onEdit}
-                    onDrag={props.onDrag}
-                    onDrop={props.onDrop}
-                    debouncedTaskTitle={props.debouncedTaskTitle}
-                    dragging={props.dragging}
-                    onConfigureRecurring={props.onConfigureRecurring}
-                    timeZone={props.timeZone}
-                  />
-                ))}
+                {props.tasks.map((task) =>
+                  isCaloriesTracker ? (
+                    <MealItem
+                      key={task._id}
+                      task={task}
+                      onEdit={props.onEdit}
+                      onDelete={props.onDelete}
+                    />
+                  ) : (
+                    <TaskItem
+                      key={task._id}
+                      task={task}
+                      category={props.category}
+                      highlightTaskIds={props.highlightTaskIds}
+                      onUpdate={props.onUpdate}
+                      onDelete={props.onDelete}
+                      onEdit={props.onEdit}
+                      onDrag={props.onDrag}
+                      onDrop={props.onDrop}
+                      debouncedTaskTitle={props.debouncedTaskTitle}
+                      dragging={props.dragging}
+                      onConfigureRecurring={props.onConfigureRecurring}
+                      timeZone={props.timeZone}
+                    />
+                  ),
+                )}
               </div>
               <motion.button
                 type="button"
                 onClick={props.onAddTask}
                 whileHover={{ scale: 1.005 }}
                 whileTap={{ scale: 0.995 }}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:border-violet-400 hover:text-violet-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-violet-600 dark:hover:text-violet-400 sm:px-4 sm:py-3"
+                className={cn(
+                  "mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm font-medium transition-colors sm:px-4 sm:py-3",
+                  isCaloriesTracker
+                    ? "border-orange-200 text-orange-600 hover:border-orange-400 hover:bg-orange-50/50 dark:border-orange-900/50 dark:text-orange-400 dark:hover:border-orange-700 dark:hover:bg-orange-950/20"
+                    : "border-zinc-300 text-zinc-500 hover:border-violet-400 hover:text-violet-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-violet-600 dark:hover:text-violet-400",
+                )}
               >
                 <Plus className="size-4" />
-                Add Task
+                {isCaloriesTracker ? "Add Meal" : "Add Task"}
               </motion.button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </Card>
+    </motion.div>
   );
 }
 

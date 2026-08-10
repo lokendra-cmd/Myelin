@@ -11,7 +11,8 @@ const ReflectionSchema = new Schema(
 
 const SprintSchema = new Schema(
   {
-    date: { type: String, required: true, unique: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    date: { type: String, required: true, index: true },
     title: { type: String, required: true, trim: true },
     completedTasks: { type: Number, default: 0 },
     totalTasks: { type: Number, default: 0 },
@@ -21,6 +22,8 @@ const SprintSchema = new Schema(
   },
   { timestamps: true },
 );
+
+SprintSchema.index({ userId: 1, date: 1 }, { unique: true });
 
 export type SprintDocument = InferSchemaType<typeof SprintSchema>;
 
