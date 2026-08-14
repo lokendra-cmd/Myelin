@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Confetti } from "@/components/confetti";
+import { MyFlowWheel } from "@/components/my-flow-wheel";
 import { ProgressRing } from "@/components/progress-ring";
 import { EntityModal } from "@/components/entity/EntityModal";
 import { DynamicIcon } from "@/components/entity/ModalHeader";
@@ -37,6 +38,7 @@ import {
   parseLocalInputValueToUTC,
   getUTCTimestamp
 } from "@/utils/date";
+import { calculateMyFlow } from "@/utils/my-flow";
 import { productivityMood } from "@/utils/productivity";
 import { sumNutrition } from "@/lib/nutrition";
 
@@ -294,6 +296,11 @@ export function SprintWorkspace({
     [categories],
   );
 
+  const myFlow = useMemo(
+    () => calculateMyFlow(visibleCategories, sprint.tasks),
+    [visibleCategories, sprint.tasks],
+  );
+
   function onDrop(category: Category, targetId?: string) {
     if (!dragging) return;
     const moved = sprint.tasks.find((task) => task._id === dragging);
@@ -512,7 +519,10 @@ export function SprintWorkspace({
       </div>
 
       {/* Progress first on mobile */}
-      <div className="mb-5 lg:hidden">{progressPanel}</div>
+      <div className="mb-5 space-y-3 lg:hidden">
+        {progressPanel}
+        <MyFlowWheel result={myFlow} size={112} />
+      </div>
 
       <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="min-w-0 space-y-5 sm:space-y-6">
@@ -890,6 +900,7 @@ export function SprintWorkspace({
 
         <aside className="hidden min-w-0 space-y-6 lg:block">
           {progressPanel}
+          <MyFlowWheel result={myFlow} size={128} />
           {highlightsPanel}
           {reflectionPanel}
         </aside>

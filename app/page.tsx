@@ -1,5 +1,5 @@
 import { Dashboard } from "@/components/dashboard";
-import { getDashboardData } from "@/actions/sprints";
+import { getCategories, getDashboardData } from "@/actions/sprints";
 import { Card } from "@/components/ui/card";
 import { requireUser } from "@/lib/session";
 import { getServerTimeZone } from "@/utils/dateServer";
@@ -8,12 +8,13 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   try {
-    const [data, tz, user] = await Promise.all([
+    const [data, tz, user, categories] = await Promise.all([
       getDashboardData(),
       getServerTimeZone(),
       requireUser(),
+      getCategories(),
     ]);
-    return <Dashboard data={data} timeZone={tz} userName={user.name} />;
+    return <Dashboard data={data} timeZone={tz} userName={user.name} categories={categories} />;
   } catch (error) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-20">

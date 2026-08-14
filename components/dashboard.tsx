@@ -3,9 +3,11 @@ import type React from "react";
 import { ArrowRight, BarChart3, Flame, Sparkles, Star, Target, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { NewSprintButton } from "@/components/new-sprint-button";
+import { MyFlowWheel } from "@/components/my-flow-wheel";
 import { ProgressRing } from "@/components/progress-ring";
-import type { DashboardData } from "@/types/sprint";
+import type { CategoryDTO, DashboardData } from "@/types/sprint";
 import { prettyDate, greeting, formatSprintDate, isoDate } from "@/utils/date";
+import { calculateMyFlow } from "@/utils/my-flow";
 import { productivityMood } from "@/utils/productivity";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +15,12 @@ export function Dashboard({
   data,
   timeZone,
   userName,
+  categories,
 }: {
   data: DashboardData;
   timeZone: string;
   userName: string;
+  categories: CategoryDTO[];
 }) {
   const today = data.today;
   const todayDate = isoDate(undefined, timeZone);
@@ -24,6 +28,7 @@ export function Dashboard({
   const avg = average(data.recent);
   const best = data.recent.length ? Math.max(...data.recent.map((s) => s.productivity)) : 0;
   const recurring = today?.tasks.filter((task) => task.isRecurring).length ?? 0;
+  const myFlow = today ? calculateMyFlow(categories, today.tasks) : null;
 
   const todayTitle = today?.title.startsWith("Sprint ") || today?.title.startsWith("Myelination ")
     ? `Myelination ${formatSprintDate(today.date)}`
@@ -136,6 +141,12 @@ export function Dashboard({
           )}
         </Card>
 
+        {myFlow ? (
+          <div className="lg:hidden">
+            <MyFlowWheel result={myFlow} size={112} />
+          </div>
+        ) : null}
+
         {/* Last 7 Days */}
         <section className="min-w-0">
           <div className="mb-3 flex items-center justify-between">
@@ -208,6 +219,7 @@ export function Dashboard({
       </section>
 
       <aside className="hidden space-y-6 lg:block">
+        {myFlow ? <MyFlowWheel result={myFlow} size={128} /> : null}
         <HighlightsCard highlightTasks={highlightTasks} />
         <QuickStatsCard average={avg} best={best} recurring={recurring} />
       </aside>
