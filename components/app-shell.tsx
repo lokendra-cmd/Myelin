@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, CalendarDays, Command, Home, Brain } from "lucide-react";
+import { BarChart3, CalendarDays, Command, Home, Brain, Puzzle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandPalette } from "@/components/command-palette";
 import { NewSprintButton } from "@/components/new-sprint-button";
@@ -18,6 +18,7 @@ const nav = [
   { href: "/review", label: "Review", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/brain-dump", label: "Brain Dump", icon: Brain },
+  { href: "/mental-toolkit", label: "Mental toolkit", icon: Puzzle },
 ];
 
 function useNavPendingBroadcast(pending: boolean) {

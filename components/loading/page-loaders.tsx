@@ -245,6 +245,26 @@ export function BrainDumpPageLoader() {
   );
 }
 
+export function MentalToolkitPageLoader() {
+  return (
+    <Shell label="Loading mental toolkit" className="max-w-4xl space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Bone className="size-12 rounded-2xl" />
+          <Bone className="h-8 w-44" />
+        </div>
+        <Bone className="h-10 w-32 rounded-xl" />
+      </div>
+      <Bone className="h-20 rounded-2xl" />
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Bone key={i} className="h-[68px] rounded-2xl" />
+        ))}
+      </div>
+    </Shell>
+  );
+}
+
 export function SprintPageLoader() {
   return (
     <Shell label="Loading myelination" className="min-w-0 space-y-5 overflow-x-hidden">

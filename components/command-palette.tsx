@@ -16,8 +16,16 @@ export function CommandPalette() {
   const [results, setResults] = useState<SprintDTO[]>([]);
 
   useEffect(() => {
+    function isTypingInField() {
+      const element = document.activeElement;
+      if (!element) return false;
+      const tag = element.tagName.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return true;
+      return element instanceof HTMLElement && element.isContentEditable;
+    }
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "/" && !open) {
+      if (event.key === "/" && !open && !isTypingInField()) {
         event.preventDefault();
         setOpen(true);
       }
